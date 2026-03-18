@@ -3,7 +3,7 @@
 class SoundManager {
   private static instance: SoundManager;
   private sounds: Map<string, HTMLAudioElement> = new Map();
-  private enabled: boolean = true;
+  private enabled: boolean = false;
 
   private constructor() {
     if (typeof window !== 'undefined') {

@@ -82,7 +82,7 @@ export default function GameEngine({
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [messageType, setMessageType] = useState<'success' | 'fail' | null>(null);
   const [showParticles, setShowParticles] = useState(false);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   const [levelStats, setLevelStats] = useState<{ solved: number; total: number } | null>(null);
 
