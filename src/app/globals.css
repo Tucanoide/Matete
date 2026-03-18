@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+@theme {
+  --color-neon-purple: #975998;
+  --color-neon-cyan: #00f3ff;
+  --color-neon-pink: #ff00ff;
+  --color-bg-dark: #0d0221;
+}
+
+:root {
+  --neon-purple: #975998;
+  --neon-cyan: #00f3ff;
+  --neon-pink: #ff00ff;
+  --bg-dark: #0d0221;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+@utility neon-border {
+  border: 1px solid #a855f7;
+  box-shadow: 0 0 10px rgba(168,85,247,0.5), inset 0 0 10px rgba(168,85,247,0.5);
+}
+
+@utility neon-text-purple {
+  color: #c084fc;
+  text-shadow: 0 0 8px rgba(192,132,252,0.8);
+}
+
+@utility neon-text-cyan {
+  color: #22d3ee;
+  text-shadow: 0 0 8px rgba(34,211,238,0.8);
+}
+
+@utility neon-box {
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+@utility neon-button {
+  position: relative;
+  padding: 0.5rem 1.5rem;
+  background-color: transparent;
+  border: 1px solid #9333ea;
+  color: #c084fc;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  transition: all 0.3s;
+  
+  &:hover {
+    background-color: #9333ea;
+    color: white;
+    box-shadow: 0 0 20px rgba(168,85,247,0.8);
+  }
+}
+
+@utility cyber-grid {
+  background-image: 
+    linear-gradient(rgba(151, 89, 152, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(151, 89, 152, 0.1) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* 80s Scanlines effect */
+@layer base {
+  .scanlines {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .scanlines::after {
+    content: " ";
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    right: 0;
+    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+    z-index: 2;
+    background-size: 100% 2px, 3px 100%;
+    pointer-events: none;
+  }
+}

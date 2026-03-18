@@ -1,0 +1,39 @@
+# MATETE WEB: Migration & Implementation Plan
+
+Este plan detalla los pasos para migrar el motor de juego de Matete (B4A) a una plataforma web moderna, incluyendo la migración de datos y la implementación de la nueva estética funcional.
+
+## Proposed Changes
+
+### 1. Database Migration (SQLite -> PostgreSQL)
+Migración de los diccionarios y niveles desde `BaseJv57SEc.sqlite`.
+- [MODIFY] Script de migración en `/scripts/migrate_db.ts` (Actualizado para Prisma 7.x con `@prisma/adapter-pg`).
+- [NEW] Esquema de Prisma (`schema.prisma`) con soporte para driver adapters.
+
+### 2. Backend & Auth (Next.js API & NextAuth)
+- [NEW] Configuración de NextAuth con el proveedor de Google.
+- [NEW] Server Actions para:
+  - Validar palabras contra la DB (prevención de cheats).
+  - Registrar tiempo de resolución y actualizar el ranking.
+  - Comprar pistas (descontar "Neuronas").
+
+### 3. Frontend & UI (Neon Synthwave)
+- [MODIFY] `globals.css`: Implementación del sistema de diseño (colores Neon, fuentes retro, animaciones de glow) en Tailwind v4.
+- [NEW] Componentes principales:
+  - `GameEngine`: Manejo del estado del juego, temporizadores y entrada por teclado.
+  - `RankingBoard`: Tablas dinámicas para rankings Global, Semanal y por Nivel.
+  - `DefinitionReveal`: Animación de entrada de texto tipo terminal retro.
+
+---
+
+## Verification Plan
+
+### Automated Tests
+- **Vitest:** Tests unitarios para la lógica de validación de palabras.
+- **Playwright/Browser:**
+  - Verificar que el login de Google redirige correctamente.
+  - Validar que el temporizador se detiene al adivinar una palabra.
+
+### Manual Verification
+1. Loguearse con una cuenta de prueba.
+2. Resolver 3 palabras del Nivel 1.
+3. Verificar en la base de datos que el tiempo se guardó correctamente.

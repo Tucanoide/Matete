@@ -1,0 +1,113 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id            String     @id @default(cuid())
+  name          String?
+  email         String?    @unique
+  emailVerified DateTime?
+  image         String?
+  points        Int        @default(0)
+  neuronas      Int        @default(50)
+  levelId       Int        @default(1)
+  totalTime     Float      @default(0)
+  accounts      Account[]
+  progress      Progress[]
+  sessions      Session[]
+}
+
+model Level {
+  id           Int     @id
+  name         String
+  description  String?
+  costJump     Int     @default(15)
+  costLetter   Int     @default(1)
+  costHelp     Int     @default(1)
+  messageStart String?
+  messageEnd   String?
+  words        Word[]
+}
+
+model Word {
+  id             Int        @id
+  word           String
+  description    String
+  difficulty     String?
+  type           String?
+  levelId        Int
+  help01         String?
+  help02         String?
+  help03         String?
+  dictionary     String?
+  dictionaryWord String?
+  premium        String     @default("N")
+  progress       Progress[]
+  level          Level      @relation(fields: [levelId], references: [id])
+}
+
+model Progress {
+  id              String    @id @default(cuid())
+  userId          String
+  wordId          Int
+  guessed         Boolean   @default(false)
+  skipped         Boolean   @default(false)
+  revealedIndices Int[]     @default([])
+  startTime       DateTime  @default(now())
+  endTime         DateTime?
+  timeTaken       Float?
+  user            User      @relation(fields: [userId], references: [id])
+  word            Word      @relation(fields: [wordId], references: [id])
+
+  @@unique([userId, wordId])
+}
+
+model Setting {
+  id    String @id
+  value String
+}
+
+model GameMessage {
+  id      String @id @default(cuid())
+  content String
+  type    String // 'success' or 'fail'
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}

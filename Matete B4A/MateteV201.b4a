@@ -1,0 +1,574 @@
+﻿Version=5.8
+NumberOfModules=6
+Module1=Publicos
+Module2=Jugar
+Module3=FacebookActivity
+Module4=Twitter
+Module5=SlideMenu
+Module6=SvcBaseRemota
+Build1=Default,com.matetejuego.free
+ManifestCode='This code will be applied to the manifest file during compilation.~\n~'You do not need to modify it in most cases.~\n~'See this link for for more information: http://www.basic4ppc.com/forum/showthread.php?p=78136~\n~AddManifestText(~\n~<uses-sdk android:minSdkVersion="4" android:targetSdkVersion="14"/>~\n~<supports-screens android:largeScreens="true" ~\n~    android:normalScreens="true" ~\n~    android:smallScreens="true" ~\n~    android:anyDensity="true"/>)~\n~AddApplicationText(~\n~    <meta-data~\n~        android:name="com.facebook.sdk.ApplicationId"~\n~        android:value="@string/app_id"/>~\n~    <activity~\n~        android:name="com.facebook.LoginActivity"~\n~        android:theme="@android:style/Theme.Translucent.NoTitleBar"~\n~        android:label="@string/app_name"/>)~\n~AddApplicationText(~\n~<activity android:name="io.display.sdk.DioActivity" ></activity>~\n~<activity android:name="io.display.sdk.DioTranslucentActivity"~\n~android:theme="@android:style/Theme.Translucent.NoTitleBar.Fullscreen" ></activity>)~\n~AddApplicationText(~\n~      <activity~\n~        android:name="com.datasteam.twitter.android.TwitterActivity"~\n~        android:theme="@android:style/Theme.Translucent.NoTitleBar"/>)~\n~AddApplicationText(<activity android:name="com.purplebrain.adbuddiz.sdk.AdBuddizActivity"~\n~      android:theme="@android:style/Theme.Translucent" />)~\n~'ADMOB~\n~'AddApplicationText(~\n~'<meta-data android:name="com.google.android.gms.version"~\n~'  android:value="@integer/google_play_services_version"/>~\n~'<activity android:name="com.google.android.gms.ads.AdActivity"~\n~'  android:configChanges="keyboard|keyboardHidden|orientation|screenLayout|uiMode|screenSize|smallestScreenSize"/>~\n~')~\n~'End of AdMob~\n~AddPermission(android.permission.WRITE_EXTERNAL_STORAGE)		~\n~AddPermission(android.permission.READ_EXTERNAL_STORAGE)~\n~AddPermission(android.permission.GET_ACCOUNTS)~\n~AddPermission(android.permission.INTERNET)~\n~AddPermission(android.permission.ACCESS_NETWORK_STATE)~\n~AddPermission(android.permission.READ_PHONE_STATE)~\n~AddPermission(android.permission.SET_WALLPAPER)~\n~AddPermission(android.permission.WAKE_LOCK)~\n~AddPermission(android.permission.RECEIVE_BOOT_COMPLETED)~\n~SetApplicationAttribute(android:icon, "@drawable/icon")~\n~SetApplicationAttribute(android:label, "$LABEL$")~\n~'End of default text.~\n~
+IconFile=
+NumberOfFiles=139
+File1=adivino.wav
+File2=azul-bajar.png
+File3=Azul-Bajar-Letras.png
+File4=azul-btn-compartir.png
+File5=azul-btn-menu.png
+File6=azul-btn-mute.png
+File7=azul-btn-pedir.png
+File8=Azul-btn-resolver.png
+File9=azul-costos.png
+File10=Azul-Error-Borde.png
+File11=Azul-icon-flag.png
+File12=azul-letra-off-borde.png
+File13=Azul-menu-fondo.png
+File14=azul-palabra-comprada-borde.png
+File15=azul-palabra-off-borde.png
+File16=azul-palabra-on-borde.png
+File17=Azul-Share-Cancelar.png
+File18=Azul-Share-Confirmar.png
+File19=Azul-Share-Fb.png
+File20=Azul-Share-Tw.png
+File21=azul-subir.png
+File22=BaseJ.sqlite
+File23=BaseUE.sqlite
+File24=chan.wav
+File25=comprar2.png
+File26=Facebook.bal
+File27=facebookCuadrado64.png
+File28=fbk.png
+File29=gris-bajar.png
+File30=gris-btn-compartir.png
+File31=gris-btn-menu.png
+File32=gris-btn-mute.png
+File33=gris-btn-pedir.png
+File34=Gris-btn-resolver.png
+File35=gris-costos.png
+File36=Gris-Error-Borde.png
+File37=Gris-icon-flag.png
+File38=gris-letra-off-borde.png
+File39=Gris-menu-fondo.png
+File40=gris-palabra-comprada-borde.png
+File41=gris-palabra-off-borde.png
+File42=gris-palabra-on-borde.png
+File43=Gris-Share-Cancelar.png
+File44=Gris-Share-Confirmar.png
+File45=Gris-Share-Fb.png
+File46=Gris-Share-Tw.png
+File47=gris-subir.png
+File48=icudt46l.zip
+File49=InicioV2.bal
+File50=JugarV2.bal
+File51=Loading.bal
+File52=Matete.ico
+File53=mateteiconcuadrado.jpg
+File54=MateteSuperluper.jpg
+File55=Menu-Ayuda.png
+File56=Menu-Creditos.png
+File57=Menu-Historia.png
+File58=Menu-Salir.png
+File59=Menu-Sonido-Off.png
+File60=Menu-Sonido-On.png
+File61=Menu-Tienda.png
+File62=Menu-Volver.png
+File63=Neurona-Icon-Top-2.png
+File64=nuevapalabra.wav
+File65=OpenSans-Light.ttf
+File66=OpenSans-Regular.ttf
+File67=OpenSans-Semibold.ttf
+File68=Premium.bal
+File69=Productos.bal
+File70=rojo-bajar.png
+File71=rojo-bajar-letras.png
+File72=rojo-btn-compartir.png
+File73=rojo-btn-menu.png
+File74=rojo-btn-mute.png
+File75=rojo-btn-pedir.png
+File76=Rojo-btn-resolver.png
+File77=rojo-cancelar060.png
+File78=rojo-costos.png
+File79=Rojo-Error-Borde.png
+File80=Rojo-icon-flag.png
+File81=rojo-letra-off-borde.png
+File82=Rojo-menu-fondo.png
+File83=rojo-palabra-comprada-borde.png
+File84=rojo-palabra-off-borde.png
+File85=rojo-palabra-on-borde.png
+File86=Rojo-Share-Cancelar.png
+File87=Rojo-Share-Confirmar.png
+File88=Rojo-Share-Fb.png
+File89=Rojo-Share-Tw.png
+File90=rojo-subir.png
+File91=SEGUIR.png
+File92=Shadow-1.png
+File93=Thumbs.db
+File94=Twitter.bal
+File95=Twitterv2.bal
+File96=verde-bajar.png
+File97=Verde-Bajar-Letras.png
+File98=verde-btn-compartir.png
+File99=verde-btn-menu.png
+File100=verde-btn-mute.png
+File101=verde-btn-pedir.png
+File102=Verde-btn-resolver.png
+File103=verde-confirmar060.png
+File104=verde-costos.png
+File105=Verde-Error-Borde.png
+File106=Verde-icon-flag.png
+File107=verde-letra-off-borde.png
+File108=Verde-menu-fondo.png
+File109=verde-palabra-comprada-borde.png
+File110=verde--palabra-off-borde.png
+File111=verde-palabra-on-borde.png
+File112=Verde-Share-Cancelar.png
+File113=Verde-Share-Confirmar.png
+File114=Verde-Share-Fb.png
+File115=Verde-Share-Tw.png
+File116=verde-subir.png
+File117=Violeta-Bajar.png
+File118=Violeta-Bajar-Letras.png
+File119=Violeta-Btn-Compartir.png
+File120=Violeta-Btn-Menu.png
+File121=Violeta-Btn-Mute.png
+File122=Violeta-Btn-Pedir.png
+File123=Violeta-Btn-Pedir-Completa.png
+File124=Violeta-Btn-Resolver.png
+File125=Violeta-Btn-Resolver-Completa.png
+File126=Violeta-Costos.png
+File127=Violeta-Error-Borde.png
+File128=Violeta-Icon-Flag.png
+File129=Violeta-Letra-Off-Borde.png
+File130=Violeta-menu-fondo.png
+File131=Violeta-Palabra-Comprada-Borde.png
+File132=Violeta-Palabra-Off-Borde.png
+File133=Violeta-Palabra-On-Borde.png
+File134=Violeta-Share-Cancelar.png
+File135=Violeta-Share-Confirmar.png
+File136=Violeta-Share-Fb.png
+File137=Violeta-Share-Tw.png
+File138=Violeta-Subir.png
+File139=vr.txt
+NumberOfLibraries=26
+Library1=core
+Library2=phone
+Library3=reflection
+Library4=sql
+Library5=camera
+Library6=sqlcipher
+Library7=http
+Library8=usb
+Library9=leadboltb4a
+Library10=socialapi
+Library11=audio
+Library12=sip
+Library13=icosgraphics
+Library14=byteconverter
+Library15=stringutils
+Library16=animationplus
+Library17=javaobject
+Library18=inappbilling3
+Library19=betterdialogs
+Library20=maskededittext
+Library21=animation
+Library22=deqxsnzjljlvxnxnens
+Library23=vezwxcnkwtxanzrgclpw
+Library24=json
+Library25=iodisplay
+Library26=analytics
+@EndOfDesignText@
+'#Region  Project Attributes 
+	#ApplicationLabel: Matete
+	#VersionCode: 59
+	#VersionName: 1.59 Reforestación Neuronal
+	
+	'SupportedOrientations possible values: unspecified, landscape or portrait.
+	#SupportedOrientations: portrait
+	#CanInstallToExternalStorage: True
+	
+	'#DebuggerForceStandardAssets: true 
+	' x el tema del gif decoder que no funciona con el debug
+	
+	'configuracion para Facebook Wrapper
+	#AdditionalRes: ..\AppConfig
+	#AdditionalRes: c:\Android\socialapi\facebook\sdk\res
+	#AdditionalJar: c:\Android\socialapi\facebook\sdk\facebooksdk.jar
+	'configuracion twitter wrapper
+	#AdditionalRes: c:\Android\socialapi\twitter\sdk\res
+	#AdditionalJar: c:\Android\socialapi\twitter\sdk\twittersdk.jar
+
+	'#AdditionalRes: C:\android-sdk-windows\extras\google\google_play_services\libproject\google-play-services_lib\res, com.google.android.gms
+	'para adMob
+	#AdditionalRes: C:\Android\android-sdk\extras\google\google_play_services\libproject\google-play-services_lib\res, com.google.android.gms
+	'slidding menu
+    '#AdditionalRes: C:\Users\Papa\Documents\AndroidProgramas\AndroidEjemplos\Slinding menu\SlidingMenu-master\library\res, com.jeremyfeinstein.slidingmenu.lib
+	'#AdditionalRes: C:\Program Files (x86)\Anywhere Software\Basic4android\Libraries\SlidingMenu-master\library\res, com.jeremyfeinstein.slidingmenu.lib
+'com.matete.hoysalemat
+'com.matetejuego.free
+#End Region
+
+#Region  Activity Attributes 
+	#FullScreen: True
+	#IncludeTitle: False
+
+#End Region
+
+Sub Process_Globals
+'LIBRERIA vezwxc... es el SDK de leadbolt
+
+
+	
+	Dim bFinDeJuego As Boolean = False
+	'si fuerza la base de usuario. Debe estar siempre en false, salvo en la primera version productiva (la 7)
+	Dim bForzarUsuario As Boolean = False
+	'These global variables will be declared once when the application starts.
+	'These variables can be accessed from all modules.
+	Public g_DirGrabable As String 
+	'devicevalues
+	'usuario
+	Public g_sEMail As String, g_sIMEI As String
+
+	Public g_NombreBaseLocalJuego As String ="BaseJ.sqlite"
+	Public g_NombreBaseLocalUsuario As String = "BaseUE.sqlite"
+	Dim g_sPswBaseJ As String= "NadaAnsioDeNada"
+	Dim g_sPswBaseU As String = "MientrasDuraElInstante2"	
+	Dim g_DirGrabable As String
+	Public g_sqlBaseLocalJuego As SQLCipher, g_sqlBaseLocalUsuario As SQLCipher
+
+
+End Sub
+
+Sub Globals
+	'These global variables will be redeclared each time the activity is created.
+	'These variables can only be accessed from this module.
+	Private lblJugar As Label
+	Private imgFondo As ImageView
+	Dim iCuentaReset As Int
+	Dim tFontDefault As Typeface
+	Dim sFontDefault As String= "OpenSans-Regular.ttf"
+	Private ImgIconoFondo As ImageView
+	Private lblMail As Label
+	Dim AnimPlus As AnimationPlus
+	Private lblMatete As Label
+	Private lblPremium As Label
+	Private lblDivergente As Label
+End Sub
+
+
+Sub Activity_Create(FirstTime As Boolean)
+	
+	'Activity.LoadLayout("MateteInicio")
+	Activity.Color = Colors.white
+
+	Activity.LoadLayout("InicioV2")
+	Publicos.Set_PantallaCargaSet(Activity, ImgIconoFondo, lblJugar,Colors.rgb(151,89,152), False)
+	SetPantalla
+	lblJugar.Text = "CARGANDO..."
+	DoEvents
+	lblJugar.Text = "JUGAR"
+	AnimacionInicio
+
+	InicializacionGeneral
+	
+	If FirstTime Then
+		ServicioLogRemoto
+		Base_CheckVersion_BaseJ
+		'Publicos.AbreBases
+
+		Publicos.AbreBasesParam(g_sqlBaseLocalJuego, g_NombreBaseLocalJuego, g_sPswBaseJ, _ 
+								g_sqlBaseLocalUsuario, g_NombreBaseLocalUsuario, g_sPswBaseU)
+
+		Base_CheckVersion_BaseU
+	
+		Base_CheckPalabras
+	
+	End If
+	SetPantalla_Premium
+
+End Sub
+
+
+
+Sub Activity_Resume
+	If bFinDeJuego Then
+		Activity.Finish
+	End If
+End Sub
+
+Sub Activity_Pause (UserClosed As Boolean)
+	'g_sqlBaseLocalUsuario.close
+	'g_sqlBaseLocalJuego.close
+	
+End Sub
+
+Sub ImgIconoFondo_Click
+	lblJugar_Click
+End Sub
+
+Sub lblJugar_Click
+	Jugar_Inicia(False)
+End Sub
+
+
+Sub imgFondo_Click
+
+	Jugar.bIniciarPremium = True
+	StartActivity("Jugar")
+
+'iCuentaReset = iCuentaReset +1
+'If iCuentaReset =10 Then
+
+	'Publicos.Magia(iCuentaReset)
+
+'End If
+End Sub
+
+Sub InicializacionGeneral
+	Dim bBaseUsuarioCopiada As Boolean = False
+	'InicializaVariables
+	g_DirGrabable = Publicos.Get_DirectorioBase
+	'
+	Publicos.CargaDeviceValues
+	'trae iMei y mail del usuario
+	g_sIMEI=Publicos.getIMEI
+	g_sEMail = Publicos.GetUsuario
+	
+	'AbreBaseDeDatos
+	
+	Publicos.Archivo_CopiaDesdeAssets(g_NombreBaseLocalJuego, False, g_DirGrabable)
+	bBaseUsuarioCopiada=Publicos.Archivo_CopiaDesdeAssets(g_NombreBaseLocalUsuario, bForzarUsuario, g_DirGrabable)
+	
+	Publicos.AbreBaseCipher(g_sqlBaseLocalUsuario, g_DirGrabable, g_NombreBaseLocalUsuario, g_sPswBaseU)
+	Publicos.AbreBasecipher(g_sqlBaseLocalJuego, g_DirGrabable, g_NombreBaseLocalJuego, g_sPswBaseJ)
+	
+	' si no la copio porque ya existia, cheque la version de la base de juego por si la tiene que actualizar y la actualiza
+	Base_CheckVersion_BaseJ 
+
+	' si es una base nueva, graba informacion del usuario
+	If bBaseUsuarioCopiada Then
+		'If Publicos.UsuarioExiste(g_sqlBaseLocalJuego) = False Then
+		Publicos.UsuarioGrabaImei(g_sqlBaseLocalJuego,g_sIMEI)
+	End If
+	
+	If Publicos.UsuarioExiste(g_sqlBaseLocalUsuario) = False Then
+		'If Publicos.UsuarioExiste(g_sqlBaseLocalUsuario) = False Then
+		Publicos.UsuarioGrabaImei(g_sqlBaseLocalUsuario,g_sIMEI)
+	End If
+
+		
+End Sub
+Sub SetPantalla
+	tFontDefault = Typeface.LoadFromAssets(sFontDefault)
+
+	
+	
+	lblJugar.Color = Colors.White
+	lblJugar.height = Activity.Height * 0.1
+	lblJugar.Width = Activity.Width
+	lblJugar.Top = Activity.Height*0.1
+	lblJugar.Text = "JUGAR"
+	lblJugar.Gravity = Gravity.CENTER
+	Publicos.SetLabelTextSize (lblJugar,lblJugar.Text, 30,6,100)
+	
+	Publicos.CentrarControl(Activity, lblJugar, True, False)
+	
+	lblMatete.height = Activity.Height * 0.05
+	lblDivergente.Height = lblMatete.Height 
+	lblPremium.Height = lblMatete.Height 
+	lblMatete.Width = Activity.Width
+	lblDivergente.Width = Activity.Width
+	lblPremium.Width = Activity.Width
+	lblMatete.Left = 0
+	
+	
+	lblMatete.Text =     "M  A  T  E  T  E " & Chr(169) 
+	lblDivergente.Text = "D I V E R G E N T E"
+	
+	lblPremium.Text = ""
+	lblMatete.Gravity = Gravity.CENTER
+	lblDivergente.Gravity = Gravity.CENTER
+	lblPremium.Gravity = Gravity.CENTER
+
+	lblMatete.Top = Activity.Height * 0.7
+	lblDivergente.Top = lblMatete.Top + lblMatete.Height + 1dip
+	lblPremium.top = lblDivergente.Top + lblDivergente.height*2
+
+	Publicos.SetLabelTextSize(lblMatete, lblMatete.Text, 20,6, 100)
+	lblDivergente.TextSize = lblMatete.TextSize * 0.8
+	lblPremium.TextSize = lblMatete.TextSize
+
+	lblMatete.TextColor = Colors.rgb(151,89,152)
+	lblDivergente.TextColor = Colors.rgb(151,89,152)
+	lblPremium.TextColor = Colors.rgb(151,89,152)
+	lblMail.TextColor = Colors.rgb(151,89,152)
+	lblJugar.TextColor = Colors.rgb(151,89,152)
+
+	lblMail.Width = Activity.Width 
+	lblMail.Color = Colors.Transparent
+	lblMail.Height = lblPremium.Height/2
+	'lblMail.Typeface = tFontDefault	
+	lblMail.Gravity = Gravity.CENTER_HORIZONTAL
+	lblMail.Top = Activity.Height - lblMail.Height *1.5
+	lblMail.Text = "MateteJuego@gmail.com"
+	Publicos.CentrarControl(Activity, lblMail,True, False)
+	lblMail.Visible = False
+
+
+End Sub
+
+Sub Activity_KeyPress(KeyCode As Int) As Boolean
+
+If KeyCode = KeyCodes.KEYCODE_BACK Then
+	Activity.finish
+	Return True
+Else
+	Return False
+End If
+End Sub
+
+Sub ServicioLogRemoto
+	Dim idPalabra As Int
+
+	Try
+		idPalabra = Publicos.Get_PalabraEnJuego(g_sqlBaseLocalUsuario)
+		'envia el id de la palabra a continuación del imei
+		CallSubDelayed3(SvcBaseRemota,"RecibeParametros", g_sIMEI& "%" & idPalabra, g_sEMail )
+	Catch
+		Log("Error en servicio remoto")
+	End Try
+End Sub
+
+Sub Base_GetVersionAssets As Int
+	Dim sLinea As String,  iDesde As Int, iHasta As Int, iRet As Int
+	'lee el archivo para obtener la version de la base de datos
+	 sLinea= File.ReadString(File.DirAssets, "vr.txt")
+	If sLinea.substring2(0,4) ="vrbj" Then
+		iDesde = 5
+		iHasta = sLinea.Length 
+		iRet= sLinea.SubString2 (iDesde, iHasta)
+	End If
+Return iRet
+End Sub
+
+Sub Base_GetVersionInstalada As Int
+Dim crVer As Cursor, iVersion As Int =0
+Try
+	crVer = g_sqlBaseLocalJuego.ExecQuery("Select VersionBase from Seteos")
+	If crVer.RowCount>0 Then
+		crVer.Position=0
+		iVersion = crVer.GetInt2(0)
+	End If
+	crVer.close
+Catch
+	Publicos.ManejaError("Base_GetVersionInstalada", LastException.Message)
+End Try
+	
+Return iVersion
+End Sub
+
+Sub Base_CheckVersion_BaseJ As Boolean
+'verifica si cambio la version de la base de juego y fuerza la copia. Devuelve True si la copio
+Dim iVerInstalada As Int, iVerAssets As Int, bRet As Boolean=False
+	iVerInstalada = Base_GetVersionInstalada
+	iVerAssets = Base_GetVersionAssets
+
+	If iVerInstalada<iVerAssets Then
+		g_sqlBaseLocalJuego.Close ' cierra la base
+	' la vuelve a copiar
+		Publicos.Archivo_CopiaDesdeAssets(g_NombreBaseLocalJuego, True, g_DirGrabable)
+	' la vuelve a abrir
+		Publicos.AbreBaseCipher(g_sqlBaseLocalJuego, g_DirGrabable, g_NombreBaseLocalJuego, g_sPswBaseJ)	
+
+		bRet = True
+	End If
+Return bRet
+End Sub
+
+Sub Base_CheckVersion_BaseU
+' si no existe la tabla de seteosUsuario, la crea. 
+
+	'verifica si existe la tabla de seteos, si no existe la crea.
+	Dim crcursor As Cursor, sSql As String
+	sSql = "SELECT count(1) cuenta from sqlite_master where type = 'table' and name ='SeteosUsuario'"
+	crcursor = g_sqlBaseLocalUsuario.ExecQuery(sSql)
+
+	If crcursor.RowCount > 0 Then
+		crcursor.Position=0
+		If crcursor.GetInt2(0) =0 Then
+			sSql = "CREATE  TABLE main.SeteosUsuario (tiposeteo VARCHAR PRIMARY KEY  Not Null , enterodesde integer, enterohasta integer, fechadesde DateTime, fechahasta DateTime, texto varchar)"
+			g_sqlBaseLocalUsuario.ExecNonQuery(sSql)
+		End If
+	End If
+	crcursor.close
+
+	'verifica si existen los registros de seteos
+	'sonido. si no existe, lo agrega con el sonido apagado
+	If Publicos.Get_SeteoUsuarioExiste(g_sqlBaseLocalUsuario, "Sonido") = False Then
+		Publicos.SeteoUsuarioEnteroDesde_Inserta(g_sqlBaseLocalUsuario, "Sonido", 0)
+	End If
+
+	
+
+
+End Sub
+
+Sub AnimacionInicio
+	'AnimPlus.InitializeRotateCenter("AnimPlus", 0, 360, ImgIconoFondo)
+	'AnimPlus.InitializeAlpha("AnimPlus", 0, 300)
+	'AnimPlus.InitializeRotateCenter("AnimPlus",0,720, ImgIconoFondo)
+	AnimPlus.InitializeScaleCenter("AnimPlus", 0, 0, 1, 1, ImgIconoFondo)
+	AnimPlus.SetInterpolator(AnimPlus.INTERPOLATOR_BOUNCE)
+
+	Activity.invalidate
+	AnimPlus.Duration = 4000
+	If AnimPlus.IsInitialized Then
+		AnimPlus.Stop(ImgIconoFondo)
+		Activity.Invalidate
+		AnimPlus.Start(ImgIconoFondo)
+	End If
+End Sub
+
+
+Sub Base_CheckPalabras
+'verifica las palabras que tiene que tener disponibles el jugador
+'Ahora las palabras estan en principio en Palabras_Almacen
+' y Palabras esta vacía. Hay un proceso que la llena.
+' se llena con las palabras gratuitas siempre (o se agregan las nuevas)
+' y si compró la versión premium también se agregan las palabras premium (marcadas en una columna como premium =S)
+
+	'verifica si se apagó la propaganda
+	Dim bPremium As Boolean, bUsuarioAntiguo As Boolean, bTodasLasPalabras As Boolean
+	
+	bPremium = Publicos.Get_EsPremium(g_sqlBaseLocalUsuario)
+	
+	
+	bUsuarioAntiguo = Publicos.Get_UsuarioAntiguo(g_sqlBaseLocalUsuario)
+	bTodasLasPalabras = bPremium Or bUsuarioAntiguo
+	'verifica si tiene que actualizar palabras 
+	If Publicos.get_CantidadPalabrasAlmacen(g_sqlBaseLocalJuego, bTodasLasPalabras) <> Publicos.get_CantidadPalabras(g_sqlBaseLocalJuego) Then
+		Publicos.Base_ActualizaPalabrasDesdeAlmacen(g_sqlBaseLocalJuego, bPremium, bUsuarioAntiguo)
+	End If
+
+End Sub
+
+Sub lblPremium_Click
+If Publicos.Get_EsPremium(g_sqlBaseLocalUsuario) = False Then
+	Jugar_Inicia(True)
+End If 
+End Sub
+
+Sub Jugar_Inicia (bPremium As Boolean)
+	iCuentaReset=0
+	Jugar.bIniciarPremium = bPremium
+	StartActivity("Jugar")
+	Activity.finish
+End Sub
+
+
+Sub SetPantalla_Premium
+	If Publicos.Get_EsPremium(g_sqlBaseLocalUsuario) Then
+		lblPremium.Text = "VERSIÓN PREMIUM"
+	Else
+		lblPremium.Text = "¿MATETE PREMIUM?" 
+	End If
+End Sub
