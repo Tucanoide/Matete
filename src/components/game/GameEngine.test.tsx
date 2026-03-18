@@ -382,4 +382,43 @@ describe('GameEngine Component', () => {
 
     expect(useHint).toHaveBeenCalledWith(1, 'skip')
   })
+
+  it('should trigger next word when Enter is pressed after a correct guess', async () => {
+    const nextWordData = { 
+      word: 'MORALEJA', 
+      description: 'Nueva definición', 
+      id: 576, 
+      levelId: 1
+    }
+    vi.mocked(getRandomWordFromLevel).mockResolvedValueOnce(nextWordData as any)
+
+    render(
+      <GameEngine 
+        initialWord={initialWord} 
+        initialDescription={initialDescription} 
+        initialLevel={initialLevel} 
+        initialWordId={1}
+        initialNeedsUsername={false}
+      />
+    )
+
+    // Win the game first by typing correctly
+    screen.getByTestId('game-container').focus()
+    for (const char of 'PLATANO') {
+      fireEvent.keyDown(window, { key: char })
+    }
+
+    // Wait for victory state
+    await screen.findByRole('button', { name: /SIGUIENTE/i })
+
+    // Press Enter to go to next word
+    fireEvent.keyDown(window, { key: 'Enter' })
+
+    await waitFor(() => {
+      expect(getRandomWordFromLevel).toHaveBeenCalledWith(1)
+    })
+    
+    // Verify next word is rendered
+    expect(await screen.findByText(/Nueva definición/i)).toBeInTheDocument()
+  })
 })

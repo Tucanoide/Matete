@@ -103,14 +103,26 @@ export default function GameEngine({
   }, [isGuessed]);
 
   // Ref for all states needed by the keydown listener to avoid frequent re-binding
-  const listenerStateRef = React.useRef({ userInput, cursorPos, currentWord, revealedIndices, isGuessed, isLoadingNext });
+  const listenerStateRef = React.useRef({ userInput, cursorPos, currentWord, revealedIndices, isGuessed, isLoadingNext, showLevelUpModal });
   useEffect(() => {
-    listenerStateRef.current = { userInput, cursorPos, currentWord, revealedIndices, isGuessed, isLoadingNext };
-  }, [userInput, cursorPos, currentWord, revealedIndices, isGuessed, isLoadingNext]);
+    listenerStateRef.current = { userInput, cursorPos, currentWord, revealedIndices, isGuessed, isLoadingNext, showLevelUpModal };
+  }, [userInput, cursorPos, currentWord, revealedIndices, isGuessed, isLoadingNext, showLevelUpModal]);
 
   useEffect(() => {
     const handleKeyDown = (e: globalThis.KeyboardEvent) => {
-      const { isGuessed: g, isLoadingNext: l, currentWord: cw, revealedIndices: ri } = listenerStateRef.current;
+      const { isGuessed: g, isLoadingNext: l, currentWord: cw, revealedIndices: ri, showLevelUpModal: slm } = listenerStateRef.current;
+
+      if (e.key === 'Enter') {
+        if (g && !l) {
+          if (slm) {
+            handleStartNextLevel();
+          } else {
+            handleNextWord();
+          }
+        }
+        return;
+      }
+
       if (g || l) return;
 
       if (e.key === 'Backspace') {
@@ -278,6 +290,12 @@ export default function GameEngine({
         setUserInput(newInputs);
         setFeedbackMessage(null);
       }
+    } else if (e.key === 'Enter' && isGuessed && !isLoadingNext) {
+      if (showLevelUpModal) {
+        handleStartNextLevel();
+      } else {
+        handleNextWord();
+      }
     }
   };
 
@@ -358,28 +376,46 @@ export default function GameEngine({
       if (fullInput.length === currentWord.length && !userInput.includes('')) {
         if (fullInput === currentWord.toUpperCase()) {
           setIsGuessed(true);
-          const msg = await getRandomMessage('success');
-          setFeedbackMessage(msg);
           setMessageType('success');
-          setShowParticles(true);
-          soundManager.play('success');
           
-          const result = await recordWordSolved(currentWordId, timer);
-          await updateSession();
-          
-          if (result.success && result.isLevelComplete) {
-            setLevelStats(result.levelStats);
-            setTimeout(() => {
-              setShowLevelUpModal(true);
-              soundManager.play('level_up');
-            }, 500); // Reduced delay from 1500ms to 500ms
+          try {
+            // Give immediate feedback even if server is slow
+            setFeedbackMessage('¡Excelente!');
+            setShowParticles(true);
+            soundManager.play('success');
+            
+            // Then fetch the dynamic message and record progress
+            const [msg, result] = await Promise.all([
+               getRandomMessage('success'),
+               recordWordSolved(currentWordId, timer)
+            ]);
+            
+            if (msg) setFeedbackMessage(msg);
+            await updateSession();
+            
+            if (result.success && result.isLevelComplete) {
+              setLevelStats(result.levelStats);
+              setTimeout(() => {
+                setShowLevelUpModal(true);
+                soundManager.play('level_up');
+              }, 500);
+            }
+          } catch (error) {
+            console.error('Error recording word solved:', error);
+            // Even if recording fails, at least felicitate the user
+          } finally {
+            setTimeout(() => setShowParticles(false), 3000);
           }
-          setTimeout(() => setShowParticles(false), 3000);
         } else {
-          const msg = await getRandomMessage('fail');
-          setFeedbackMessage(msg);
-          setMessageType('fail');
-          soundManager.play('fail');
+          try {
+            const msg = await getRandomMessage('fail');
+            setFeedbackMessage(msg);
+            setMessageType('fail');
+            soundManager.play('fail');
+          } catch (error) {
+            setFeedbackMessage('Esa no es la palabra correcta...');
+            setMessageType('fail');
+          }
         }
       }
     };
