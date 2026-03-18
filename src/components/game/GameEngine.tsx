@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Clock, Brain, User, X, Lightbulb, SkipForward, Timer as TimerIcon, Volume2, VolumeX, Keyboard, ChevronRight, Trash2, LayoutGrid } from 'lucide-react';
+import { Trophy, Timer as TimerIcon, LayoutGrid, Keyboard, Volume2, VolumeX, Brain, Trash2, HelpCircle, Lightbulb, Sparkles, User as UserIcon, SkipForward, ChevronRight, X, Clock } from 'lucide-react';
+import UsernameModal from './UsernameModal';
+import InstructionsModal from './InstructionsModal';
 import { useSession, signOut } from 'next-auth/react';
 import { getRandomWordFromLevel, recordWordSolved, useHint, moveToNextLevel, getRandomMessage } from '@/app/actions/game';
 import { getRandomSuccessMessage, getRandomFailMessage } from '@/lib/messages';
@@ -16,9 +18,17 @@ interface GameEngineProps {
   initialLevel: number;
   initialWordId: number;
   initialRevealedIndices?: number[];
+  initialNeedsUsername?: boolean;
 }
 
-export default function GameEngine({ initialWord, initialDescription, initialLevel, initialWordId, initialRevealedIndices }: GameEngineProps) {
+export default function GameEngine({
+  initialWord,
+  initialDescription,
+  initialLevel,
+  initialWordId,
+  initialRevealedIndices = [],
+  initialNeedsUsername = false,
+}: GameEngineProps) {
   const { data: session, update: updateSession } = useSession();
   
   // Game State
@@ -26,18 +36,42 @@ export default function GameEngine({ initialWord, initialDescription, initialLev
   const [currentWordId, setCurrentWordId] = useState(initialWordId);
   const [currentDescription, setCurrentDescription] = useState(initialDescription);
   const [currentLevel, setCurrentLevel] = useState(initialLevel);
-  const [revealedIndices, setRevealedIndices] = useState<number[]>(initialRevealedIndices || []);
+  const [revealedIndices, setRevealedIndices] = useState<number[]>(initialRevealedIndices);
   const [isPoolMode, setIsPoolMode] = useState(true);
+  const [needsUsername, setNeedsUsername] = useState(initialNeedsUsername);
+  const [showInstructions, setShowInstructions] = useState(false);
   
   const [userInput, setUserInput] = useState<string[]>(() => {
     const input = new Array(initialWord.length).fill('');
-    (initialRevealedIndices || []).forEach(idx => {
+    initialRevealedIndices.forEach(idx => {
       input[idx] = initialWord[idx].toUpperCase();
     });
     return input;
   });
   
-  const [cursorPos, setCursorPos] = useState(0);
+  const [cursorPos, setCursorPos] = useState(() => {
+    let first = 0;
+    while (first < initialWord.length && (initialRevealedIndices || []).includes(first)) {
+      first++;
+    }
+    return Math.min(first, initialWord.length - 1);
+  });
+
+  const getValidCursor = useCallback((target: number, direction: 'forward' | 'backward') => {
+    let current = target;
+    if (direction === 'forward') {
+      while (current < currentWord.length && revealedIndices.includes(current)) {
+        current++;
+      }
+      return current; // Can be currentWord.length
+    } else {
+      while (current >= 0 && revealedIndices.includes(current)) {
+        current--;
+      }
+      return Math.max(current, 0);
+    }
+  }, [currentWord.length, revealedIndices]);
+
   const [timer, setTimer] = useState(0);
   const [isGuessed, setIsGuessed] = useState(false);
   const [isLoadingNext, setIsLoadingNext] = useState(false);
@@ -59,73 +93,57 @@ export default function GameEngine({ initialWord, initialDescription, initialLev
     return () => clearInterval(interval);
   }, [isGuessed]);
 
-  // Handle keyboard input
-  const handleKeyDown = useCallback((e: globalThis.KeyboardEvent) => {
-    if (isGuessed || isLoadingNext) return;
-
-    if (e.key === 'Backspace') {
-      const newInputs = [...userInput];
-      if (userInput[cursorPos] === '' && cursorPos > 0) {
-        newInputs[cursorPos - 1] = '';
-        setUserInput(newInputs);
-        setCursorPos(cursorPos - 1);
-        setFeedbackMessage(null);
-      } else {
-        newInputs[cursorPos] = '';
-        setUserInput(newInputs);
-        setFeedbackMessage(null);
-      }
-    } else if (e.key.length === 1 && /^[a-zA-ZñÑ]$/.test(e.key)) {
-      const newInputs = [...userInput];
-      newInputs[cursorPos] = e.key.toUpperCase();
-      setUserInput(newInputs);
-      setFeedbackMessage(null);
-      
-      if (cursorPos < currentWord.length - 1) {
-        setCursorPos(cursorPos + 1);
-      }
-    }
-  }, [cursorPos, userInput, isGuessed, currentWord, isLoadingNext]);
+  // Ref for all states needed by the keydown listener to avoid frequent re-binding
+  const listenerStateRef = React.useRef({ userInput, cursorPos, currentWord, revealedIndices, isGuessed, isLoadingNext });
+  useEffect(() => {
+    listenerStateRef.current = { userInput, cursorPos, currentWord, revealedIndices, isGuessed, isLoadingNext };
+  }, [userInput, cursorPos, currentWord, revealedIndices, isGuessed, isLoadingNext]);
 
   useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
+    const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      const { isGuessed: g, isLoadingNext: l, currentWord: cw, revealedIndices: ri } = listenerStateRef.current;
+      if (g || l) return;
 
-  // Check word
-  useEffect(() => {
-    const checkWord = async () => {
-      const fullInput = userInput.join('');
-      if (fullInput.length === currentWord.length && !userInput.includes('')) {
-        if (fullInput === currentWord.toUpperCase()) {
-          setIsGuessed(true);
-          setFeedbackMessage(getRandomSuccessMessage(currentWordId));
-          setMessageType('success');
-          setShowParticles(true);
-          soundManager.play('success');
-          // Persist success
-          const result = await recordWordSolved(currentWordId, timer);
-          await updateSession();
+      if (e.key === 'Backspace') {
+        setCursorPos(prevCursor => {
+          let targetCursor = prevCursor;
           
-          if (result.success && result.isLevelComplete) {
-            setLevelStats(result.levelStats);
-            setTimeout(() => {
-              setShowLevelUpModal(true);
-              soundManager.play('level_up'); // Assumed sound exists
-            }, 1500);
-          }
-
-          setTimeout(() => setShowParticles(false), 3000);
-        } else {
-          // Only show fail message if they reached the end and it's wrong
-          setFeedbackMessage(getRandomFailMessage());
-          setMessageType('fail');
-          soundManager.play('fail');
-        }
+          setUserInput(prevInputs => {
+            const newInputs = [...prevInputs];
+            if (prevInputs[prevCursor] === '' && prevCursor > 0) {
+              const prev = getValidCursor(prevCursor - 1, 'backward');
+              newInputs[prev] = '';
+              targetCursor = prev;
+            } else {
+              newInputs[prevCursor] = '';
+            }
+            return newInputs;
+          });
+          
+          setFeedbackMessage(null);
+          return targetCursor;
+        });
+      } else if (e.key.length === 1 && /^[a-zA-ZñÑ]$/.test(e.key)) {
+        setCursorPos(prevCursor => {
+          if (prevCursor >= cw.length || ri.includes(prevCursor)) return prevCursor;
+          
+          setUserInput(prevInputs => {
+            const newInputs = [...prevInputs];
+            newInputs[prevCursor] = e.key.toUpperCase();
+            return newInputs;
+          });
+          
+          setFeedbackMessage(null);
+          return getValidCursor(prevCursor + 1, 'forward');
+        });
       }
     };
-    checkWord();
-  }, [userInput, currentWord, currentWordId]);
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [getValidCursor]); // Only getValidCursor is stable enough
+
+  // (Old checkWord removed, using version below)
 
   const handleNextWord = async () => {
     setIsLoadingNext(true);
@@ -135,8 +153,13 @@ export default function GameEngine({ initialWord, initialDescription, initialLev
         setCurrentWord(nextWord.word);
         setCurrentWordId(nextWord.id);
         setCurrentDescription(nextWord.description);
-        setUserInput(new Array(nextWord.word.length).fill(''));
+        
+        // Correct initialization for a NEW word (no hints yet)
+        const input = new Array(nextWord.word.length).fill('');
+        setUserInput(input);
+        setRevealedIndices([]);
         setCursorPos(0);
+        
         setTimer(0);
         setIsGuessed(false);
         setFeedbackMessage(null);
@@ -160,12 +183,18 @@ export default function GameEngine({ initialWord, initialDescription, initialLev
         setCurrentWord(result.nextWord.word);
         setCurrentWordId(result.nextWord.id);
         setCurrentDescription(result.nextWord.description);
-        setUserInput(new Array(result.nextWord.word.length).fill(''));
+        
+        // Correct initialization for the first word of next level
+        const input = new Array(result.nextWord.word.length).fill('');
+        setUserInput(input);
+        setRevealedIndices([]);
         setCursorPos(0);
+        
         setTimer(0);
         setIsGuessed(false);
         setFeedbackMessage(null);
         setMessageType(null);
+        setShowParticles(false);
         setShowLevelUpModal(false);
         soundManager.play('new_word');
         await updateSession();
@@ -210,14 +239,14 @@ export default function GameEngine({ initialWord, initialDescription, initialLev
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.slice(-1); // Get last char
     if (val && /^[a-zA-ZñÑ]$/.test(val)) {
+      if (cursorPos >= currentWord.length || revealedIndices.includes(cursorPos)) return;
       const newInputs = [...userInput];
       newInputs[cursorPos] = val.toUpperCase();
       setUserInput(newInputs);
       setFeedbackMessage(null);
       
-      if (cursorPos < currentWord.length - 1) {
-        setCursorPos(cursorPos + 1);
-      }
+      const next = getValidCursor(cursorPos + 1, 'forward');
+      setCursorPos(next);
     }
     e.target.value = ''; // Always clear
   };
@@ -226,9 +255,10 @@ export default function GameEngine({ initialWord, initialDescription, initialLev
     if (e.key === 'Backspace') {
       const newInputs = [...userInput];
       if (userInput[cursorPos] === '' && cursorPos > 0) {
-        newInputs[cursorPos - 1] = '';
+        const prev = getValidCursor(cursorPos - 1, 'backward');
+        newInputs[prev] = '';
         setUserInput(newInputs);
-        setCursorPos(cursorPos - 1);
+        setCursorPos(prev);
         setFeedbackMessage(null);
       } else {
         newInputs[cursorPos] = '';
@@ -274,6 +304,7 @@ export default function GameEngine({ initialWord, initialDescription, initialLev
       const newInputs = [...userInput];
       newInputs[firstEmpty] = char;
       setUserInput(newInputs);
+      setCursorPos(getValidCursor(firstEmpty + 1, 'forward'));
       setFeedbackMessage(null);
       soundManager.play('click'); // Assumed sound
     }
@@ -290,6 +321,7 @@ export default function GameEngine({ initialWord, initialDescription, initialLev
       }
     }
     setUserInput(newInputs);
+    setCursorPos(getValidCursor(index, 'forward'));
     setFeedbackMessage(null);
   };
 
@@ -302,11 +334,12 @@ export default function GameEngine({ initialWord, initialDescription, initialLev
       }
     });
     setUserInput(newInputs);
+    setCursorPos(getValidCursor(0, 'forward'));
     setFeedbackMessage(null);
   };
 
-  // Check word (Modified to use dynamic message from DB)
   useEffect(() => {
+    if (isGuessed) return;
     const checkWord = async () => {
       const fullInput = userInput.join('');
       if (fullInput.length === currentWord.length && !userInput.includes('')) {
@@ -326,7 +359,7 @@ export default function GameEngine({ initialWord, initialDescription, initialLev
             setTimeout(() => {
               setShowLevelUpModal(true);
               soundManager.play('level_up');
-            }, 1500);
+            }, 500); // Reduced delay from 1500ms to 500ms
           }
           setTimeout(() => setShowParticles(false), 3000);
         } else {
@@ -361,7 +394,16 @@ export default function GameEngine({ initialWord, initialDescription, initialLev
   };
 
   return (
-    <div className="space-y-6 md:space-y-8 max-w-4xl mx-auto px-2 sm:px-0">
+    <div className="space-y-4 md:space-y-6 max-w-4xl mx-auto px-2 sm:px-0">
+      <AnimatePresence>
+        {needsUsername && (
+          <UsernameModal onSuccess={() => setNeedsUsername(false)} />
+        )}
+        {showInstructions && (
+          <InstructionsModal isOpen={showInstructions} onClose={() => setShowInstructions(false)} />
+        )}
+      </AnimatePresence>
+
       {/* Hidden input for Keyboard Mode */}
       {!isPoolMode && (
         <input
@@ -418,14 +460,15 @@ export default function GameEngine({ initialWord, initialDescription, initialLev
       {/* Main Game Area */}
       <div 
         onClick={!isPoolMode ? handleFocus : undefined}
-        className="bg-[#1a1033]/40 border-2 border-[#ff00ff]/20 rounded-2xl md:rounded-3xl p-6 md:p-12 backdrop-blur-xl relative overflow-hidden group"
+        data-testid="game-container"
+        className="bg-[#1a1033]/40 border-2 border-[#ff00ff]/20 rounded-2xl md:rounded-3xl p-4 md:p-8 backdrop-blur-xl relative overflow-hidden group focus:outline-none"
       >
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#ff00ff]/50 to-transparent" />
         
         {/* Definition */}
-        <div className="mb-6 md:mb-12 relative">
+        <div className="mb-4 md:mb-8 relative">
           <div className="absolute -left-4 md:-left-6 top-0 bottom-0 w-1 bg-[#ff00ff]/30 rounded-full" />
-          <h2 className="text-lg md:text-2xl font-medium leading-relaxed text-[#00ffff]/90 italic">
+          <h2 className="text-base md:text-xl font-medium leading-relaxed text-[#00ffff]/90 italic">
             "{currentDescription}"
           </h2>
         </div>
@@ -463,6 +506,7 @@ export default function GameEngine({ initialWord, initialDescription, initialLev
           {userInput.map((char, index) => (
             <motion.div
               key={index}
+              data-testid={`word-box-${index}`}
               initial={false}
               onClick={() => handleWordBoxClick(index)}
               animate={{
@@ -566,7 +610,6 @@ export default function GameEngine({ initialWord, initialDescription, initialLev
       <AnimatePresence>
         {showParticles && <VictoryParticles />}
       </AnimatePresence>
-      <AnimatePresence>
         {showLevelUpModal && levelStats && (
           <LevelUpModal 
             level={currentLevel}
@@ -574,7 +617,6 @@ export default function GameEngine({ initialWord, initialDescription, initialLev
             onNextLevel={handleStartNextLevel}
           />
         )}
-      </AnimatePresence>
     </div>
   );
 }

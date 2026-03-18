@@ -126,7 +126,7 @@ export default function RankingBoard({ onClose, currentLevel }: RankingBoardProp
 
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-[#00ffff] group-hover:text-white transition-colors truncate">
-                      {user.name || 'Anónimo'}
+                      {user.username || user.name || 'Anónimo'}
                     </p>
                     <div className="flex flex-wrap gap-2 md:gap-4 mt-1">
                       <div className="flex items-center gap-1 text-[10px] font-mono text-[#ff00ff]/80 whitespace-nowrap">

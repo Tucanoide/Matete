@@ -29,6 +29,7 @@ export default async function Home() {
             initialLevel={firstLevel.id}
             initialWordId={firstWord.id}
             initialRevealedIndices={gameState?.revealedIndices}
+            initialNeedsUsername={gameState?.needsUsername}
           />
         ) : (
           <div className="text-center py-20 bg-[#1a1033]/40 border-2 border-[#ff00ff]/30 rounded-2xl backdrop-blur-xl">

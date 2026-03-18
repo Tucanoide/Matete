@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import '@testing-library/jest-dom'
 import GameEngine from './GameEngine'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
@@ -7,7 +8,7 @@ import { getRandomWordFromLevel, recordWordSolved, useHint, moveToNextLevel } fr
 // Mocking Next-Auth
 vi.mock('next-auth/react', () => ({
   __esModule: true,
-  useSession: vi.fn(() => ({ data: null, status: 'unauthenticated', update: vi.fn() })),
+  useSession: vi.fn(() => ({ data: null, status: 'unauthenticated', update: vi.fn(() => Promise.resolve()) })),
   signOut: vi.fn(),
 }))
 
@@ -22,17 +23,29 @@ vi.mock('@/app/actions/game', () => {
     useHint: vi.fn(),
     moveToNextLevel: vi.fn(),
     getInitialGameState: vi.fn(),
+    getRandomMessage: vi.fn(() => Promise.resolve('¡Bien hecho!')),
   };
 })
+
+// Mocking Sound Manager
+vi.mock('@/lib/sounds', () => ({
+  soundManager: {
+    play: vi.fn(),
+    setEnabled: vi.fn(),
+  }
+}))
 
 describe('GameEngine Component', () => {
   const initialWord = 'PLATANO'
   const initialDescription = 'Metal precioso negador con cáscara'
   const initialLevel = 1
 
+  let user: ReturnType<typeof userEvent.setup>
+
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(recordWordSolved).mockResolvedValue({ success: true, isLevelComplete: false } as any)
+    user = userEvent.setup()
   })
 
   it('should render the initial description and level', () => {
@@ -42,6 +55,7 @@ describe('GameEngine Component', () => {
         initialDescription={initialDescription} 
         initialLevel={initialLevel} 
         initialWordId={1}
+        initialNeedsUsername={false}
       />
     )
     
@@ -56,15 +70,17 @@ describe('GameEngine Component', () => {
         initialDescription={initialDescription} 
         initialLevel={initialLevel} 
         initialWordId={1}
+        initialNeedsUsername={false}
       />
     )
 
+    screen.getByTestId('game-container').focus()
     fireEvent.keyDown(window, { key: 'P' })
     fireEvent.keyDown(window, { key: 'L' })
 
     await waitFor(() => {
-      expect(screen.getByText('P')).toBeInTheDocument()
-      expect(screen.getByText('L')).toBeInTheDocument()
+      expect(screen.getByTestId('word-box-0')).toHaveTextContent('P')
+      expect(screen.getByTestId('word-box-1')).toHaveTextContent('L')
     })
   })
 
@@ -75,13 +91,15 @@ describe('GameEngine Component', () => {
         initialDescription={initialDescription} 
         initialLevel={initialLevel} 
         initialWordId={1}
+        initialNeedsUsername={false}
       />
     )
 
     // Type the correct word
-    'PLATANO'.split('').forEach(char => {
-      fireEvent.keyDown(window, { key: char })
-    })
+    screen.getByTestId('game-container').focus()
+    for (const char of 'PLATANO') {
+      await user.keyboard(char)
+    }
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /SIGUIENTE/i })).toBeInTheDocument()
@@ -111,16 +129,18 @@ describe('GameEngine Component', () => {
         initialDescription={initialDescription} 
         initialLevel={initialLevel} 
         initialWordId={1}
+        initialNeedsUsername={false}
       />
     )
 
+    screen.getByTestId('game-container').focus()
     // Win the game first
-    'PLATANO'.split('').forEach(char => {
+    for (const char of 'PLATANO') {
       fireEvent.keyDown(window, { key: char })
-    })
+    }
 
     const nextBtn = await screen.findByRole('button', { name: /SIGUIENTE/i })
-    fireEvent.click(nextBtn)
+    await user.click(nextBtn)
 
     await waitFor(() => {
       expect(getRandomWordFromLevel).toHaveBeenCalledWith(1)
@@ -138,14 +158,15 @@ describe('GameEngine Component', () => {
         initialDescription={initialDescription} 
         initialLevel={initialLevel} 
         initialWordId={1}
+        initialNeedsUsername={false}
       />
     )
 
     fireEvent.keyDown(window, { key: 'P' })
-    await waitFor(() => expect(screen.getByText('P')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('word-box-0')).toHaveTextContent('P'))
     
     fireEvent.keyDown(window, { key: 'Backspace' })
-    await waitFor(() => expect(screen.queryByText('P')).not.toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('word-box-0')).toHaveTextContent(''))
   })
 
   it('should show LevelUpModal when current level is completed', async () => {
@@ -164,15 +185,17 @@ describe('GameEngine Component', () => {
         initialDescription={initialDescription} 
         initialLevel={initialLevel} 
         initialWordId={1}
+        initialNeedsUsername={false}
       />
     )
 
     // Type the correct word
-    'PLATANO'.split('').forEach(char => {
-      fireEvent.keyDown(window, { key: char })
-    })
+    screen.getByTestId('game-container').focus()
+    for (const char of 'PLATANO') {
+      await user.keyboard(char)
+    }
 
-    // LevelUpModal appears after a delay of 1500ms
+    // LevelUpModal appears after a delay
     await waitFor(() => {
       expect(screen.getByText(/NIVEL 1 COMPLETADO/i)).toBeInTheDocument()
     }, { timeout: 10000 })
@@ -181,12 +204,15 @@ describe('GameEngine Component', () => {
   })
 
   it('should call moveToNextLevel and update state when level up modal button is clicked', async () => {
-    const nextWordData = { 
-      word: 'NUEVA', 
-      description: 'Definición nivel 2', 
-      id: 200, 
-      levelId: 2 
-    }
+    // Define next word for level 2
+    const nextWordData = {
+      word: 'NIVEL2',
+      id: 2,
+      description: 'Definición nivel 2',
+      difficulty: 'HARD',
+      type: 'WORD',
+      levelId: 2
+    };
     
     // Mock the chain of events
     vi.mocked(recordWordSolved).mockResolvedValueOnce({
@@ -209,24 +235,70 @@ describe('GameEngine Component', () => {
         initialDescription={initialDescription} 
         initialLevel={initialLevel} 
         initialWordId={1}
+        initialNeedsUsername={false}
       />
     )
 
+    screen.getByTestId('game-container').focus()
     // Complete the level
-    'PLATANO'.split('').forEach(char => {
+    for (const char of 'PLATANO') {
       fireEvent.keyDown(window, { key: char })
-    })
+    }
 
-    // Wait for modal and click
-    const nextBtn = await screen.findByRole('button', { name: /ACCEDER AL NIVEL 2/i }, { timeout: 10000 })
-    fireEvent.click(nextBtn)
+    // Wait for the modal and button to appear (handling the delay in GameEngine)
+    const nextLevelBtn = await screen.findByRole('button', { name: /ACCEDER AL NIVEL 2/i }, { timeout: 10000 })
+    await user.click(nextLevelBtn)
+    
+    // Wait for the modal to be removed from the DOM (handling AnimatePresence)
+    await waitFor(() => {
+      expect(screen.queryByText(/NIVEL 1 COMPLETADO/i)).not.toBeInTheDocument()
+    }, { timeout: 10000 })
 
     // Wait for the UI to update to Level 2
-    await waitFor(() => {
-      // PROOF of success: The level display must show "Nivel 2"
-      expect(screen.getByText(/Nivel 2/i)).toBeInTheDocument()
+    // Wait for the UI to update to Level 2
+    await waitFor(async () => {
+      // PROOF: The level display must show "Nivel 2"
+      const levelTexts = await screen.findAllByText(/Nivel 2/i)
+      expect(levelTexts.length).toBeGreaterThan(0)
+      
       // AND the next word description must be visible
-      expect(screen.getByText(/Definición nivel 2/i)).toBeInTheDocument()
+      const descTexts = await screen.findAllByText(/Definición nivel 2/i)
+      expect(descTexts.length).toBeGreaterThan(0)
+    }, { timeout: 15000 })
+  }, 30000)
+
+  it('should reset cursor to 0 and allow typing from start after clearing word', async () => {
+    render(
+      <GameEngine 
+        initialWord={initialWord} 
+        initialDescription={initialDescription} 
+        initialLevel={initialLevel} 
+        initialWordId={1}
+        initialNeedsUsername={false}
+      />
+    )
+
+    screen.getByTestId('game-container').focus()
+    // Type one letter
+    fireEvent.keyDown(window, { key: 'P' })
+    await waitFor(() => expect(screen.getByTestId('word-box-0')).toHaveTextContent('P'), { timeout: 5000 })
+    
+    // Type another
+    fireEvent.keyDown(window, { key: 'L' })
+    await waitFor(() => expect(screen.getByTestId('word-box-1')).toHaveTextContent('L'), { timeout: 5000 })
+    
+    // Click clear button (Trash2 icon)
+    const clearBtn = await screen.findByTitle(/Limpiar palabra/i)
+    await user.click(clearBtn)
+    
+    // Regain focus after clear
+    screen.getByTestId('game-container').focus()
+
+    // Typing 'M' should now appear at the first box
+    fireEvent.keyDown(window, { key: 'M' })
+    
+    await waitFor(() => {
+      expect(screen.getByTestId('word-box-0')).toHaveTextContent('M')
     }, { timeout: 10000 })
-  }, 20000)
+  })
 })

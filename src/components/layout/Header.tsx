@@ -2,26 +2,34 @@
 
 import React, { useState } from 'react';
 import { useSession, signIn, signOut } from 'next-auth/react';
-import { Trophy, LogIn, LogOut, User as UserIcon } from 'lucide-react';
+import { Trophy, LogIn, LogOut, User as UserIcon, HelpCircle } from 'lucide-react';
 import RankingBoard from '../game/RankingBoard';
+import InstructionsModal from '../game/InstructionsModal';
 import { AnimatePresence } from 'framer-motion';
 
 export default function Header() {
   const { data: session } = useSession();
   const [showRanking, setShowRanking] = useState(false);
+  const [showInstructions, setShowInstructions] = useState(false);
 
   return (
     <>
       <header className="flex justify-between items-center mb-12 animate-fade-in relative z-20">
-        <div className="flex-1">
-          {/* Logo / Title area could go here if needed, but we have it in main page. 
-              Let's keep it centered in main page and use header for actions. */}
+        <div className="flex-1 flex flex-col sm:flex-row gap-2">
           <button 
             onClick={() => setShowRanking(true)}
-            className="flex items-center gap-2 px-3 py-2 md:px-4 bg-[#ff00ff]/10 hover:bg-[#ff00ff]/20 border border-[#ff00ff]/30 rounded-full transition-all group"
+            className="flex items-center justify-center sm:justify-start gap-2 px-3 py-2 md:px-4 bg-[#ff00ff]/10 hover:bg-[#ff00ff]/20 border border-[#ff00ff]/30 rounded-full transition-all group shrink-0"
           >
             <Trophy className="w-4 h-4 text-[#ff00ff] group-hover:scale-110 transition-transform" />
-            <span className="hidden sm:inline font-mono text-xs font-bold text-[#ff00ff] tracking-widest uppercase">Rankings</span>
+            <span className="font-mono text-[10px] sm:text-xs font-bold text-[#ff00ff] tracking-widest uppercase">Rankings</span>
+          </button>
+          
+          <button 
+            onClick={() => setShowInstructions(true)}
+            className="flex items-center justify-center sm:justify-start gap-2 px-3 py-2 md:px-4 bg-[#00ffff]/10 hover:bg-[#00ffff]/20 border border-[#00ffff]/30 rounded-full transition-all group shrink-0"
+          >
+            <HelpCircle className="w-4 h-4 text-[#00ffff] group-hover:scale-110 transition-transform" />
+            <span className="font-mono text-[10px] sm:text-xs font-bold text-[#00ffff] tracking-widest uppercase">Cómo jugar</span>
           </button>
         </div>
 
@@ -70,12 +78,17 @@ export default function Header() {
           )}
         </div>
       </header>
-
       <AnimatePresence>
         {showRanking && (
           <RankingBoard 
             onClose={() => setShowRanking(false)} 
             currentLevel={session?.user?.levelId || 1} 
+          />
+        )}
+        {showInstructions && (
+          <InstructionsModal 
+            isOpen={showInstructions} 
+            onClose={() => setShowInstructions(false)} 
           />
         )}
       </AnimatePresence>
