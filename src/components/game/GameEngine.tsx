@@ -85,6 +85,16 @@ export default function GameEngine({
   const [soundEnabled, setSoundEnabled] = useState(false);
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   const [levelStats, setLevelStats] = useState<{ solved: number; total: number } | null>(null);
+  const [needsRefresh, setNeedsRefresh] = useState(false);
+
+  // Helper to handle server action errors (detect stale sessions)
+  const handleActionError = useCallback((error: any, context: string) => {
+    console.error(`Error in ${context}:`, error);
+    const errorMsg = error?.message || String(error);
+    if (errorMsg.includes('UnrecognizedActionError') || errorMsg.includes('not found on the server')) {
+      setNeedsRefresh(true);
+    }
+  }, []);
 
   // Sync neuronas from session when session loads (for authenticated users)
   useEffect(() => {
@@ -189,7 +199,7 @@ export default function GameEngine({
         soundManager.play('new_word');
       }
     } catch (error) {
-      console.error('Error fetching next word:', error);
+       handleActionError(error, 'fetching next word');
     } finally {
       setIsLoadingNext(false);
     }
@@ -221,7 +231,7 @@ export default function GameEngine({
         await updateSession();
       }
     } catch (error) {
-      console.error('Error moving to next level:', error);
+      handleActionError(error, 'moving to next level');
     } finally {
       setIsLoadingNext(false);
     }
@@ -401,7 +411,7 @@ export default function GameEngine({
               }, 500);
             }
           } catch (error) {
-            console.error('Error recording word solved:', error);
+            handleActionError(error, 'recording word solved');
             // Even if recording fails, at least felicitate the user
           } finally {
             setTimeout(() => setShowParticles(false), 3000);
@@ -413,6 +423,7 @@ export default function GameEngine({
             setMessageType('fail');
             soundManager.play('fail');
           } catch (error) {
+            handleActionError(error, 'checking word (fail path)');
             setFeedbackMessage('Esa no es la palabra correcta...');
             setMessageType('fail');
           }
@@ -426,21 +437,27 @@ export default function GameEngine({
     if (isGuessed || isLoadingNext) return;
     
     setIsLoadingNext(true);
-    const result = await useHint(currentWordId, 'letter');
-    if (result.success && result.revealedIndices) {
-      setRevealedIndices(result.revealedIndices);
-      const newInputs = [...userInput];
-      result.revealedIndices.forEach(idx => {
-        newInputs[idx] = currentWord[idx].toUpperCase();
-      });
-      setUserInput(newInputs);
-      // Update local neuronas immediately so button enables/disables correctly
-      if (result.remainingNeuronas !== undefined) {
-        setNeuronas(result.remainingNeuronas);
+    try {
+      const result = await useHint(currentWordId, 'letter');
+      if (result.success && result.revealedIndices) {
+        setRevealedIndices(result.revealedIndices);
+        const newInputs = [...userInput];
+        result.revealedIndices.forEach(idx => {
+          newInputs[idx] = currentWord[idx].toUpperCase();
+        });
+        setUserInput(newInputs);
+        // Update local neuronas immediately so button enables/disables correctly
+        if (result.remainingNeuronas !== undefined) {
+          setNeuronas(result.remainingNeuronas);
+        }
+        await updateSession();
+      } else if (result.error) {
+         setFeedbackMessage(result.error);
+         setMessageType('fail');
       }
-      await updateSession();
-    } else if (result.error) {
-       setFeedbackMessage(result.error);
+    } catch (error) {
+       handleActionError(error, 'giving hint');
+       setFeedbackMessage('Error al obtener la pista.');
        setMessageType('fail');
     }
     setIsLoadingNext(false);
@@ -676,6 +693,33 @@ export default function GameEngine({
             onNextLevel={handleStartNextLevel}
           />
         )}
+
+      {/* Stale Session / Refresh Modal */}
+      <AnimatePresence>
+        {needsRefresh && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-[#050510]/95 backdrop-blur-xl">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="max-w-md w-full bg-[#1a1033] border-2 border-[#00ffff]/30 rounded-3xl p-8 text-center shadow-[0_0_50px_rgba(0,255,255,0.1)]"
+            >
+              <div className="w-20 h-20 bg-[#00ffff]/10 rounded-full flex items-center justify-center mx-auto mb-6 border-2 border-[#00ffff]/20">
+                <Clock className="w-10 h-10 text-[#00ffff]" />
+              </div>
+              <h3 className="text-2xl font-black text-white mb-4 tracking-tight">¡Sincronización requerida!</h3>
+              <p className="text-[#00ffff]/70 mb-8 leading-relaxed">
+                El Matete ha recibido una actualización crítica del sistema. Para continuar tu partida sin errores, necesitamos que recargues la página.
+              </p>
+              <button
+                onClick={() => window.location.reload()}
+                className="w-full py-4 bg-[#00ffff] text-[#050510] rounded-2xl font-black text-lg hover:scale-105 active:scale-95 transition-all shadow-[0_0_30px_rgba(0,255,255,0.3)]"
+              >
+                RECARGAR AHORA
+              </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
