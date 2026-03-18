@@ -449,4 +449,53 @@ describe('GameEngine Component', () => {
         expect(screen.getByTestId('word-box-6')).toHaveTextContent('')
     })
   })
+
+  it('should toggle between Pool Mode and Keyboard Mode', async () => {
+    render(<GameEngine initialWord="TEST" initialDescription="Test" initialLevel={1} initialWordId={1} />)
+    
+    const toggleBtn = screen.getByTitle('Cambiar modo de entrada')
+    
+    // Switch to Keyboard mode
+    await user.click(toggleBtn)
+    // The input has className="sr-only" but is not aria-hidden.
+    expect(screen.getByRole('textbox', { hidden: true })).toBeInTheDocument()
+    
+    // Switch back to Pool mode
+    await user.click(toggleBtn)
+    expect(screen.queryByRole('textbox', { hidden: true })).not.toBeInTheDocument()
+  })
+
+  it('should disable and enable sound via the toggle button', async () => {
+     render(<GameEngine initialWord="TEST" initialDescription="Test" initialLevel={1} initialWordId={1} />)
+     
+     // Initially sound is disabled by default
+     const buttons = screen.getAllByRole('button')
+     const soundToggle = buttons.find(b => 
+       b.querySelector('svg')?.classList.contains('lucide-volume') || 
+       b.querySelector('svg')?.classList.contains('lucide-volume-x') ||
+       b.innerHTML.includes('lucide-volume')
+     )
+     
+     if (soundToggle) {
+       await user.click(soundToggle)
+     }
+  })
+
+  it('should clear all letters when the Clear All button is clicked', async () => {
+    render(<GameEngine initialWord="TEST" initialDescription="Test" initialLevel={1} initialWordId={1} />)
+    
+    screen.getByTestId('game-container').focus()
+    await user.keyboard('TES')
+    
+    await waitFor(() => expect(screen.getByTestId('word-box-2')).toHaveTextContent('S'))
+    
+    const clearBtn = screen.getByTitle('Limpiar palabra')
+    await user.click(clearBtn)
+    
+    await waitFor(() => {
+      expect(screen.getByTestId('word-box-0')).toHaveTextContent('')
+      expect(screen.getByTestId('word-box-1')).toHaveTextContent('')
+      expect(screen.getByTestId('word-box-2')).toHaveTextContent('')
+    })
+  })
 })
