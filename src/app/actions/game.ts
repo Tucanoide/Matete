@@ -372,6 +372,7 @@ export async function getInitialGameState() {
     return {
       word: firstWord,
       level: firstLevel,
+      neuronas: 50,
       revealedIndices: [],
       needsUsername: false
     }
@@ -429,6 +430,7 @@ export async function getInitialGameState() {
       return {
         word: nextWords[0],
         level: nextLevel,
+        neuronas: user.neuronas,
         revealedIndices: [],
         needsUsername
       }
@@ -439,6 +441,7 @@ export async function getInitialGameState() {
       return {
         word: lastWord,
         level: currentLevel,
+        neuronas: user.neuronas,
         revealedIndices: lastProgress?.revealedIndices || [],
         needsUsername
       }
@@ -450,6 +453,7 @@ export async function getInitialGameState() {
   return {
     word: initialWord,
     level: currentLevel,
+    neuronas: user.neuronas,
     revealedIndices: currentWordProgress?.revealedIndices || [],
     needsUsername
   }

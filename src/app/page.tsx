@@ -30,6 +30,7 @@ export default async function Home() {
             initialWordId={firstWord.id}
             initialRevealedIndices={gameState?.revealedIndices}
             initialNeedsUsername={gameState?.needsUsername}
+            initialNeuronas={gameState?.neuronas ?? 50}
           />
         ) : (
           <div className="text-center py-20 bg-[#1a1033]/40 border-2 border-[#ff00ff]/30 rounded-2xl backdrop-blur-xl">

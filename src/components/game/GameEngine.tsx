@@ -19,6 +19,7 @@ interface GameEngineProps {
   initialWordId: number;
   initialRevealedIndices?: number[];
   initialNeedsUsername?: boolean;
+  initialNeuronas?: number;
 }
 
 export default function GameEngine({
@@ -28,6 +29,7 @@ export default function GameEngine({
   initialWordId,
   initialRevealedIndices = [],
   initialNeedsUsername = false,
+  initialNeuronas = 50,
 }: GameEngineProps) {
   const { data: session, update: updateSession } = useSession();
   
@@ -40,6 +42,8 @@ export default function GameEngine({
   const [isPoolMode, setIsPoolMode] = useState(true);
   const [needsUsername, setNeedsUsername] = useState(initialNeedsUsername);
   const [showInstructions, setShowInstructions] = useState(false);
+  // Local neuronas state — initialized from the server, updated optimistically on spend
+  const [neuronas, setNeuronas] = useState(initialNeuronas);
   
   const [userInput, setUserInput] = useState<string[]>(() => {
     const input = new Array(initialWord.length).fill('');
@@ -82,7 +86,12 @@ export default function GameEngine({
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   const [levelStats, setLevelStats] = useState<{ solved: number; total: number } | null>(null);
 
-  const neuronas = session?.user?.neuronas ?? 50;
+  // Sync neuronas from session when session loads (for authenticated users)
+  useEffect(() => {
+    if (session?.user?.neuronas !== undefined) {
+      setNeuronas(session.user.neuronas);
+    }
+  }, [session?.user?.neuronas]);
 
   // Timer logic
   useEffect(() => {
@@ -214,6 +223,10 @@ export default function GameEngine({
     setIsLoadingNext(true);
     const result = await useHint(currentWordId, 'skip');
     if (result.success) {
+      // Update local neuronas immediately so button enables/disables correctly
+      if (result.remainingNeuronas !== undefined) {
+        setNeuronas(result.remainingNeuronas);
+      }
       await updateSession();
       await handleNextWord();
     } else {
@@ -385,6 +398,10 @@ export default function GameEngine({
         newInputs[idx] = currentWord[idx].toUpperCase();
       });
       setUserInput(newInputs);
+      // Update local neuronas immediately so button enables/disables correctly
+      if (result.remainingNeuronas !== undefined) {
+        setNeuronas(result.remainingNeuronas);
+      }
       await updateSession();
     } else if (result.error) {
        setFeedbackMessage(result.error);
@@ -429,6 +446,12 @@ export default function GameEngine({
             <TimerIcon className="w-4 h-4 md:w-5 md:h-5 text-[#00ffff]" />
             <span className="font-mono text-base md:text-xl text-[#00ffff] font-bold tabular-nums">
               {formatTime(timer)}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 border-l border-[#00ffff]/20 pl-3 md:pl-6 space-x-1 md:space-x-2">
+            <Brain className="w-4 h-4 md:w-5 md:h-5 text-green-400" />
+            <span data-testid="neuronas-count" className="font-mono text-base md:text-xl text-green-400 font-bold tabular-nums">
+              {neuronas}N
             </span>
           </div>
         </div>

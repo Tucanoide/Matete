@@ -301,4 +301,85 @@ describe('GameEngine Component', () => {
       expect(screen.getByTestId('word-box-0')).toHaveTextContent('M')
     }, { timeout: 10000 })
   })
+
+  it('should deduct neuronas when buying a letter hint', async () => {
+    vi.mocked(useHint).mockResolvedValueOnce({
+      success: true,
+      remainingNeuronas: 45,
+      revealedIndices: [0], // reveals first letter
+    })
+
+    render(
+      <GameEngine
+        initialWord={initialWord}
+        initialDescription={initialDescription}
+        initialLevel={initialLevel}
+        initialWordId={1}
+        initialNeedsUsername={false}
+        initialNeuronas={50}
+      />
+    )
+
+    // Initially should show 50 neuronas
+    expect(screen.getByTestId('neuronas-count')).toHaveTextContent('50N')
+
+    // Click the hint (letter) button
+    const hintBtn = screen.getByTitle('Pedir letra')
+    await user.click(hintBtn)
+
+    // After hint, neuronas should drop to 45
+    await waitFor(() => {
+      expect(screen.getByTestId('neuronas-count')).toHaveTextContent('45N')
+    }, { timeout: 5000 })
+
+    expect(useHint).toHaveBeenCalledWith(1, 'letter')
+  })
+
+  it('should deduct neuronas when skipping a word', async () => {
+    const nextWordData = {
+      word: 'MORALEJA',
+      description: 'Nueva palabra',
+      id: 99,
+      levelId: 1,
+      type: null,
+      difficulty: 'normal',
+      help01: null,
+      help02: null,
+      help03: null,
+      dictionary: null,
+      dictionaryWord: null,
+      premium: 'N'
+    }
+    vi.mocked(useHint).mockResolvedValueOnce({
+      success: true,
+      remainingNeuronas: 35,
+      revealedIndices: undefined,
+    })
+    vi.mocked(getRandomWordFromLevel).mockResolvedValueOnce(nextWordData as any)
+
+    render(
+      <GameEngine
+        initialWord={initialWord}
+        initialDescription={initialDescription}
+        initialLevel={initialLevel}
+        initialWordId={1}
+        initialNeedsUsername={false}
+        initialNeuronas={50}
+      />
+    )
+
+    // Initially should show 50 neuronas
+    expect(screen.getByTestId('neuronas-count')).toHaveTextContent('50N')
+
+    // Click the skip button
+    const skipBtn = screen.getByTitle('Saltar palabra')
+    await user.click(skipBtn)
+
+    // After skip, neuronas should drop to 35
+    await waitFor(() => {
+      expect(screen.getByTestId('neuronas-count')).toHaveTextContent('35N')
+    }, { timeout: 5000 })
+
+    expect(useHint).toHaveBeenCalledWith(1, 'skip')
+  })
 })
