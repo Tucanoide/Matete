@@ -141,12 +141,19 @@ export default function GameEngine({
           
           setUserInput(prevInputs => {
             const newInputs = [...prevInputs];
-            if (prevInputs[prevCursor] === '' && prevCursor > 0) {
-              const prev = getValidCursor(prevCursor - 1, 'backward');
+            // If the cursor is at the end (out of range), backtrack to the last valid character
+            let actualCursor = prevCursor;
+            if (actualCursor >= currentWord.length) {
+              actualCursor = getValidCursor(currentWord.length - 1, 'backward');
+            }
+
+            if (prevInputs[actualCursor] === '' && actualCursor > 0) {
+              const prev = getValidCursor(actualCursor - 1, 'backward');
               newInputs[prev] = '';
               targetCursor = prev;
             } else {
-              newInputs[prevCursor] = '';
+              newInputs[actualCursor] = '';
+              targetCursor = actualCursor;
             }
             return newInputs;
           });
@@ -289,15 +296,22 @@ export default function GameEngine({
   const handleInputKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Backspace') {
       const newInputs = [...userInput];
-      if (userInput[cursorPos] === '' && cursorPos > 0) {
-        const prev = getValidCursor(cursorPos - 1, 'backward');
+      
+      let actualCursor = cursorPos;
+      if (actualCursor >= currentWord.length) {
+        actualCursor = getValidCursor(currentWord.length - 1, 'backward');
+      }
+
+      if (userInput[actualCursor] === '' && actualCursor > 0) {
+        const prev = getValidCursor(actualCursor - 1, 'backward');
         newInputs[prev] = '';
         setUserInput(newInputs);
         setCursorPos(prev);
         setFeedbackMessage(null);
       } else {
-        newInputs[cursorPos] = '';
+        newInputs[actualCursor] = '';
         setUserInput(newInputs);
+        setCursorPos(actualCursor);
         setFeedbackMessage(null);
       }
     } else if (e.key === 'Enter' && isGuessed && !isLoadingNext) {

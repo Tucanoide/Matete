@@ -421,4 +421,32 @@ describe('GameEngine Component', () => {
     // Verify next word is rendered
     expect(await screen.findByText(/Nueva definición/i)).toBeInTheDocument()
   })
+
+  it('should handle backspace at the end of a full word correctly', async () => {
+    render(
+      <GameEngine 
+        initialWord={'PLATANO'} 
+        initialDescription={'Test'} 
+        initialLevel={1} 
+        initialWordId={1}
+        initialNeedsUsername={false}
+      />
+    )
+
+    // Type a full word (wrong last letter)
+    screen.getByTestId('game-container').focus()
+    for (const char of 'PLATANE') {
+       fireEvent.keyDown(window, { key: char })
+    }
+    
+    // Wait for the last letter to appear
+    await waitFor(() => expect(screen.getByTestId('word-box-6')).toHaveTextContent('E'))
+    
+    // Press Backspace. Currently this fails because cursor is at 7 and it doesn't move.
+    fireEvent.keyDown(window, { key: 'Backspace' })
+    
+    await waitFor(() => {
+        expect(screen.getByTestId('word-box-6')).toHaveTextContent('')
+    })
+  })
 })
