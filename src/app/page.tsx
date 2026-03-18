@@ -39,9 +39,6 @@ export default async function Home() {
         )}
       </div>
 
-      <footer className="fixed bottom-4 right-4 text-[#00ffff]/30 text-xs font-mono tracking-widest uppercase pointer-events-none">
-        Retro System v4.1 // Matete Desktop
-      </footer>
     </main>
   );
 }

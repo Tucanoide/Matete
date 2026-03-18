@@ -76,7 +76,7 @@ export default function UsernameModal({ onSuccess }: UsernameModalProps) {
           </h2>
           <p className="text-[#00ffff]/60 text-sm mb-8 font-mono">
             Elegí un nombre de usuario para el ranking. 
-            No queremos mostrar tu mail, queremos ver tu alias.
+            No queremos mostrar tu mail.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-6">

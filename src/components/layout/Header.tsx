@@ -34,9 +34,12 @@ export default function Header() {
         </div>
 
         <div className="flex-1 text-center">
-          <h1 className="text-3xl md:text-6xl font-black tracking-tighter italic">
-            <span className="text-transparent bg-clip-text bg-gradient-to-b from-[#00ffff] to-[#0088ff] drop-shadow-[0_0_10px_rgba(0,255,255,0.5)]">
+          <h1 className="flex flex-col items-center">
+            <span className="text-3xl md:text-6xl font-black tracking-tighter italic text-transparent bg-clip-text bg-gradient-to-b from-[#00ffff] to-[#0088ff] drop-shadow-[0_0_10px_rgba(0,255,255,0.5)] leading-none">
               MATETE
+            </span>
+            <span className="text-[10px] md:text-sm font-mono text-[#00ffff]/40 tracking-[0.8em] uppercase mt-1 mr-[-0.8em]">
+              Divergente
             </span>
           </h1>
         </div>
