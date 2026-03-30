@@ -94,27 +94,30 @@ export async function recordWordSolved(wordId: number, timeTaken: number) {
     }
   })
 
-  // 3. Check level completion
+  // 3. Check level completion (count both guessed and skipped)
   const totalWordsInLevel = await prisma.word.count({
     where: { levelId: solvedWord.levelId }
   })
 
-  const solvedWordsInLevel = await prisma.progress.count({
+  const processedWordsInLevel = await prisma.progress.count({
     where: {
       userId: user.id,
       word: { levelId: solvedWord.levelId },
-      guessed: true
+      OR: [
+        { guessed: true },
+        { skipped: true }
+      ]
     }
   })
 
-  const isLevelComplete = solvedWordsInLevel >= totalWordsInLevel
+  const isLevelComplete = processedWordsInLevel >= totalWordsInLevel
 
   return { 
     success: true, 
     updatedUser, 
     isLevelComplete,
     levelStats: {
-      solved: solvedWordsInLevel,
+      solved: processedWordsInLevel,
       total: totalWordsInLevel,
       levelId: solvedWord.levelId
     }
@@ -207,6 +210,38 @@ export async function useHint(wordId: number, type: 'letter' | 'skip') {
         skipped: true
       }
     })
+  }
+
+  // 3. If it's a skip, check for level completion
+  if (type === 'skip') {
+    const word = await prisma.word.findUnique({
+      where: { id: wordId },
+      select: { levelId: true }
+    });
+    
+    if (word) {
+      const totalWords = await prisma.word.count({ where: { levelId: word.levelId } });
+      const processedWords = await prisma.progress.count({
+        where: {
+          userId: user.id,
+          word: { levelId: word.levelId },
+          OR: [{ guessed: true }, { skipped: true }]
+        }
+      });
+      
+      const isLevelComplete = processedWords >= totalWords;
+      
+      return { 
+        success: true, 
+        remainingNeuronas: updatedUser.neuronas,
+        isLevelComplete,
+        levelStats: {
+          solved: processedWords,
+          total: totalWords,
+          levelId: word.levelId
+        }
+      }
+    }
   }
 
   return { 
@@ -311,10 +346,8 @@ export async function getRandomWordFromLevel(levelId: number) {
   })
 
   if (availableWords.length === 0) {
-    // If all words in this level are solved, just return a random one from the level 
-    // (or we could return null to trigger level up logic in the caller)
-    const allWords = await prisma.word.findMany({ where: { levelId } })
-    return allWords[Math.floor(Math.random() * allWords.length)]
+    // If all words in this level are solved, return null to trigger level completion flow
+    return null;
   }
 
   return availableWords[Math.floor(Math.random() * availableWords.length)]

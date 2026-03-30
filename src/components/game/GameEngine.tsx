@@ -212,6 +212,14 @@ export default function GameEngine({
     }
   };
 
+  const handleLevelComplete = (stats: { solved: number; total: number }) => {
+    setLevelStats(stats);
+    setTimeout(() => {
+      setShowLevelUpModal(true);
+      soundManager.play('level_up');
+    }, 500);
+  };
+
   const handleStartNextLevel = async () => {
     setIsLoadingNext(true);
     try {
@@ -252,12 +260,18 @@ export default function GameEngine({
     setIsLoadingNext(true);
     const result = await useHint(currentWordId, 'skip');
     if (result.success) {
-      // Update local neuronas immediately so button enables/disables correctly
+      // Update local neuronas immediately
       if (result.remainingNeuronas !== undefined) {
         setNeuronas(result.remainingNeuronas);
       }
       await updateSession();
-      await handleNextWord();
+      
+      if (result.isLevelComplete && result.levelStats) {
+        handleLevelComplete(result.levelStats);
+        setIsLoadingNext(false);
+      } else {
+        await handleNextWord();
+      }
     } else {
       setIsLoadingNext(false);
     }
@@ -417,12 +431,8 @@ export default function GameEngine({
             if (msg) setFeedbackMessage(msg);
             await updateSession();
             
-            if (result.success && result.isLevelComplete) {
-              setLevelStats(result.levelStats);
-              setTimeout(() => {
-                setShowLevelUpModal(true);
-                soundManager.play('level_up');
-              }, 500);
+            if (result.success && result.isLevelComplete && result.levelStats) {
+              handleLevelComplete(result.levelStats);
             }
           } catch (error) {
             handleActionError(error, 'recording word solved');
