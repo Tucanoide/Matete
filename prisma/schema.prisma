@@ -21,6 +21,12 @@ model User {
   accounts      Account[]
   progress      Progress[]
   sessions      Session[]
+  comments          Comment[]
+  commentReports    CommentReport[]
+  following         Follow[]           @relation("follower")
+  followers         Follow[]           @relation("followee")
+  challenges        Challenge[]
+  challengeAttempts ChallengeAttempt[]
 }
 
 model Level {
@@ -49,6 +55,8 @@ model Word {
   dictionaryWord String?
   premium        String     @default("N")
   progress       Progress[]
+  comments       Comment[]
+  challenges     Challenge[]
   level          Level      @relation(fields: [levelId], references: [id])
 }
 
@@ -111,4 +119,77 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+// --- 002-social ---------------------------------------------------------------
+
+model Comment {
+  id          String          @id @default(cuid())
+  wordId      Int
+  authorId    String
+  body        String
+  status      String          @default("visible") // visible | hidden_reports | hidden_admin | deleted
+  reportCount Int             @default(0)
+  createdAt   DateTime        @default(now())
+  word        Word            @relation(fields: [wordId], references: [id])
+  author      User            @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  reports     CommentReport[]
+
+  @@index([wordId, status, createdAt])
+  @@index([authorId, createdAt])
+  @@index([status])
+}
+
+model CommentReport {
+  commentId  String
+  reporterId String
+  createdAt  DateTime @default(now())
+  comment    Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  reporter   User     @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@id([commentId, reporterId])
+}
+
+model Follow {
+  followerId String
+  followeeId String
+  createdAt  DateTime @default(now())
+  follower   User     @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  followee   User     @relation("followee", fields: [followeeId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followeeId])
+  @@index([followeeId])
+}
+
+model Challenge {
+  id           String             @id @default(cuid())
+  code         String             @unique
+  creatorId    String
+  wordId       Int
+  creatorTime  Float
+  creatorHints Int
+  createdAt    DateTime           @default(now())
+  creator      User               @relation(fields: [creatorId], references: [id], onDelete: Cascade)
+  word         Word               @relation(fields: [wordId], references: [id])
+  attempts     ChallengeAttempt[]
+
+  @@unique([creatorId, wordId])
+  @@index([creatorId, createdAt])
+}
+
+model ChallengeAttempt {
+  id          String    @id @default(cuid())
+  challengeId String
+  userId      String
+  startTime   DateTime  @default(now())
+  endTime     DateTime?
+  timeTaken   Float?
+  solved      Boolean   @default(false)
+  gaveUp      Boolean   @default(false)
+  knewWord    Boolean   @default(false)
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@index([userId, startTime])
 }

@@ -15,6 +15,7 @@ vi.mock('next-auth/react', () => ({
   __esModule: true,
   useSession: vi.fn(() => ({ data: null, status: 'unauthenticated', update: vi.fn(() => Promise.resolve()) })),
   signOut: vi.fn(),
+  signIn: vi.fn(),
 }))
 
 vi.mock('@/app/actions/game', () => ({
@@ -26,6 +27,17 @@ vi.mock('@/app/actions/game', () => ({
   moveToNextLevel: vi.fn(),
   getInitialGameState: vi.fn(),
   getRandomMessage: vi.fn(() => Promise.resolve('¡Bien hecho!')),
+}))
+
+vi.mock('@/app/actions/comments', () => ({
+  getWordComments: vi.fn(() => Promise.resolve({ locked: false, comments: [], nextCursor: null, canPost: false, postBlockedReason: 'login_required' })),
+  postComment: vi.fn(),
+  reportComment: vi.fn(),
+  deleteComment: vi.fn(),
+}))
+
+vi.mock('@/app/actions/challenges', () => ({
+  createChallenge: vi.fn(),
 }))
 
 vi.mock('@/lib/sounds', () => ({
@@ -43,6 +55,7 @@ const correct = (solution: string, extra: Record<string, unknown> = {}) => ({
   points: 1,
   isLevelComplete: false,
   levelStats: { solved: 1, total: 5, levelId: 1 },
+  result: { timeTaken: 42, revealedIndices: [] as number[] },
   ...extra,
 })
 
@@ -371,6 +384,49 @@ describe('GameEngine Component', () => {
       expect(screen.getByTestId('word-box-0')).toHaveTextContent('')
       expect(screen.getByTestId('word-box-1')).toHaveTextContent('')
       expect(screen.getByTestId('word-box-2')).toHaveTextContent('')
+    })
+  })
+
+  describe('[SOC-03] panel social tras acertar (002-social)', () => {
+    async function solve() {
+      render(<GameEngine initialWord={initialWord} initialLevel={initialLevel} />)
+      for (const char of 'PLATANO') fireEvent.keyDown(window, { key: char })
+      await screen.findByRole('button', { name: /SIGUIENTE/i })
+    }
+
+    it('no se muestra antes de acertar', () => {
+      render(<GameEngine initialWord={initialWord} initialLevel={initialLevel} />)
+      expect(screen.queryByRole('button', { name: /COMPARTIR/i })).not.toBeInTheDocument()
+    })
+
+    it('muestra Compartir, Desafiar y Comentarios; el texto usa el resultado del servidor y no la palabra', async () => {
+      const writeText = vi.fn(() => Promise.resolve())
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+      Object.defineProperty(navigator, 'share', { value: undefined, configurable: true })
+
+      await solve()
+      expect(screen.getByRole('button', { name: /INGRESÁ PARA DESAFIAR/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /COMENTARIOS/i })).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: /COMPARTIR/i }))
+      await waitFor(() => expect(writeText).toHaveBeenCalled())
+      const text = (writeText.mock.calls[0] as unknown as [string])[0]
+      expect(text).toContain('Nivel 1')
+      expect(text).toContain('🟩🟩🟩🟩🟩🟩🟩')
+      expect(text).toContain('0:42')
+      expect(text).not.toMatch(/PLATANO/i)
+      expect(await screen.findByText(/¡COPIADO!/)).toBeInTheDocument()
+    })
+
+    it('Enter dentro del panel social no pasa a la siguiente palabra', async () => {
+      await solve()
+      await user.click(screen.getByRole('button', { name: /COMENTARIOS/i }))
+      const panelButton = screen.getByRole('button', { name: /OCULTAR COMENTARIOS/i })
+      fireEvent.keyDown(panelButton, { key: 'Enter' })
+      expect(getNextWord).not.toHaveBeenCalled()
+      // Fuera del panel, Enter sigue funcionando.
+      fireEvent.keyDown(window, { key: 'Enter' })
+      await waitFor(() => expect(getNextWord).toHaveBeenCalled())
     })
   })
 })

@@ -54,7 +54,7 @@ export const WORDS = {
 
 export async function resetDb() {
   await prisma.$executeRawUnsafe(
-    'TRUNCATE "Progress", "Account", "Session", "VerificationToken", "User", "Word", "Level", "Setting", "GameMessage" CASCADE'
+    'TRUNCATE "ChallengeAttempt", "Challenge", "CommentReport", "Comment", "Follow", "Progress", "Account", "Session", "VerificationToken", "User", "Word", "Level", "Setting", "GameMessage" CASCADE'
   )
   await prisma.level.createMany({
     data: [
@@ -76,4 +76,29 @@ export async function createGuestUser(data: Partial<{ neuronas: number; points: 
 
 export async function getUserById(id: string) {
   return prisma.user.findUniqueOrThrow({ where: { id } })
+}
+
+/** Usuario de Google con username (requisito de las funciones sociales). */
+export async function createSocialUser(username: string, data: Partial<{ neuronas: number; points: number; levelId: number; totalTime: number; image: string }> = {}) {
+  return prisma.user.create({ data: { email: `${username}@example.com`, name: username, username, neuronas: 50, ...data } })
+}
+
+/** Marca una palabra como acertada directamente en la base (para preparar escenarios). */
+export async function solveWord(userId: string, wordId: number, opts: { timeTaken?: number; revealedIndices?: number[] } = {}) {
+  return prisma.progress.upsert({
+    where: { userId_wordId: { userId, wordId } },
+    create: { userId, wordId, guessed: true, timeTaken: opts.timeTaken ?? 30, revealedIndices: opts.revealedIndices ?? [], startTime: new Date(), endTime: new Date() },
+    update: { guessed: true, timeTaken: opts.timeTaken ?? 30, revealedIndices: opts.revealedIndices ?? [] },
+  })
+}
+
+/** Corre el cuerpo con la sesión de un email y la restaura después. */
+export async function as<T>(email: string | null, fn: () => Promise<T>): Promise<T> {
+  const prev = harness.session
+  harness.session = email ? { user: { email } } : null
+  try {
+    return await fn()
+  } finally {
+    harness.session = prev
+  }
 }

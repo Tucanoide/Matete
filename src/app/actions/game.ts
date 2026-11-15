@@ -185,6 +185,8 @@ export type SubmitGuessResult =
       points: number
       isLevelComplete: boolean
       levelStats: LevelStats
+      /** Lo que registró el servidor para este acierto; alimenta el texto para compartir (002-social FR-003). */
+      result: { timeTaken: number; revealedIndices: number[] }
     }
   | { error: 'not_in_play' | 'invalid_guess' }
 
@@ -229,7 +231,13 @@ export async function submitGuess(wordId: number, guess: string): Promise<Submit
     return { credited: true, user: updated }
   })
 
-  const stats = await getLevelStats(prisma, user.id, word.levelId)
+  const [stats, solved] = await Promise.all([
+    getLevelStats(prisma, user.id, word.levelId),
+    prisma.progress.findUniqueOrThrow({
+      where: { userId_wordId: { userId: user.id, wordId } },
+      select: { timeTaken: true, revealedIndices: true },
+    }),
+  ])
   return {
     correct: true,
     solution: word.word.toUpperCase(),
@@ -238,6 +246,7 @@ export async function submitGuess(wordId: number, guess: string): Promise<Submit
     points: result.user.points,
     isLevelComplete: stats.solved >= stats.total,
     levelStats: stats,
+    result: { timeTaken: solved.timeTaken ?? 0, revealedIndices: solved.revealedIndices ?? [] },
   }
 }
 
@@ -339,23 +348,42 @@ export type RankingEntry = {
   points: number
   totalTime: number
   neuronas?: number
+  /** 002-social: calculados en el servidor para el usuario actual; nunca se devuelve User.id. */
+  isMe: boolean
+  isFollowed: boolean
+}
+
+/** Ids que sigue el usuario actual (solo usuarios de Google con username; si no, ninguno). */
+async function viewerContext(): Promise<{ viewerId: string | null; followed: Set<string> }> {
+  const viewer = await getCurrentUser()
+  if (!viewer) return { viewerId: null, followed: new Set() }
+  if (!viewer.email || !viewer.username) return { viewerId: viewer.id, followed: new Set() }
+  const rows = await prisma.follow.findMany({ where: { followerId: viewer.id }, select: { followeeId: true } })
+  return { viewerId: viewer.id, followed: new Set(rows.map((r) => r.followeeId)) }
 }
 
 export async function getGlobalRanking(limit: number = 10): Promise<RankingEntry[]> {
-  return prisma.user.findMany({
-    where: { email: { not: null } },
-    orderBy: [{ points: 'desc' }, { totalTime: 'asc' }, { neuronas: 'desc' }],
-    take: Math.min(Math.max(1, limit), 50),
-    select: { name: true, username: true, image: true, points: true, totalTime: true, neuronas: true },
-  })
+  const [rows, ctx] = await Promise.all([
+    prisma.user.findMany({
+      where: { email: { not: null } },
+      orderBy: [{ points: 'desc' }, { totalTime: 'asc' }, { neuronas: 'desc' }],
+      take: Math.min(Math.max(1, limit), 50),
+      select: { id: true, name: true, username: true, image: true, points: true, totalTime: true, neuronas: true },
+    }),
+    viewerContext(),
+  ])
+  return rows.map(({ id, ...rest }) => ({ ...rest, isMe: id === ctx.viewerId, isFollowed: ctx.followed.has(id) }))
 }
 
 export async function getLevelRanking(levelId: number, limit: number = 10) {
-  const usersWithProgress = await prisma.user.findMany({
-    where: { email: { not: null }, progress: { some: { word: { levelId } } } },
-    include: { progress: { where: { word: { levelId }, guessed: true } } },
-    take: limit,
-  })
+  const [usersWithProgress, ctx] = await Promise.all([
+    prisma.user.findMany({
+      where: { email: { not: null }, progress: { some: { word: { levelId } } } },
+      include: { progress: { where: { word: { levelId }, guessed: true } } },
+      take: limit,
+    }),
+    viewerContext(),
+  ])
 
   return usersWithProgress
     .map((user) => ({
@@ -364,6 +392,8 @@ export async function getLevelRanking(levelId: number, limit: number = 10) {
       image: user.image,
       levelPoints: user.progress.length,
       levelTime: user.progress.reduce((acc, p) => acc + (p.timeTaken || 0), 0),
+      isMe: user.id === ctx.viewerId,
+      isFollowed: ctx.followed.has(user.id),
     }))
     .sort((a, b) => b.levelPoints - a.levelPoints || a.levelTime - b.levelTime)
     .slice(0, limit)

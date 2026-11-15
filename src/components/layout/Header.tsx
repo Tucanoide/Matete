@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { useSession, signIn, signOut } from 'next-auth/react';
-import { Trophy, LogIn, LogOut, User as UserIcon, HelpCircle } from 'lucide-react';
+import { Trophy, LogIn, LogOut, User as UserIcon, HelpCircle, Swords } from 'lucide-react';
+import Link from 'next/link';
 import RankingBoard from '../game/RankingBoard';
 import InstructionsModal from '../game/InstructionsModal';
 import { AnimatePresence } from 'framer-motion';
@@ -31,9 +32,20 @@ export default function Header() {
             <HelpCircle className="w-4 h-4 text-[#00ffff] group-hover:scale-110 transition-transform" />
             <span className="font-mono text-[10px] sm:text-xs font-bold text-[#00ffff] tracking-widest uppercase">Cómo jugar</span>
           </button>
+
+          {session && (
+            <Link
+              href="/desafios"
+              className="flex items-center justify-center sm:justify-start gap-2 px-3 py-2 md:px-4 bg-[#ffaa00]/10 hover:bg-[#ffaa00]/20 border border-[#ffaa00]/30 rounded-full transition-all group shrink-0"
+            >
+              <Swords className="w-4 h-4 text-[#ffaa00] group-hover:scale-110 transition-transform" />
+              <span className="font-mono text-[10px] sm:text-xs font-bold text-[#ffaa00] tracking-widest uppercase">Desafíos</span>
+            </Link>
+          )}
         </div>
 
         <div className="flex-1 text-center">
+          <Link href="/" aria-label="Ir al juego" className="inline-block">
           <h1 className="flex flex-col items-center">
             <span className="text-3xl md:text-6xl font-black tracking-tighter italic text-transparent bg-clip-text bg-gradient-to-b from-[#00ffff] to-[#0088ff] drop-shadow-[0_0_10px_rgba(0,255,255,0.5)] leading-none">
               MATETE
@@ -42,6 +54,7 @@ export default function Header() {
               Divergente
             </span>
           </h1>
+          </Link>
         </div>
 
         <div className="flex-1 flex justify-end items-center gap-4">

@@ -813,3 +813,37 @@ Los casos 🔴 escritos **antes** de la corrección sirven como verificación de
 | 10 | `INFRA-02`, `INFRA-03`, `INFRA-04`, `INFRA-05` | Gates de CI |
 
 El paso 2 solo se puede verificar de verdad con la infraestructura del Anexo A, así que conviene montarla junto con el paso 1.
+
+---
+
+## SOC — Funciones sociales (feature 002-social)
+
+Agregado el 2026-11-15. Todos ✅: cubiertos por tests que pasan. Spec: [specs/002-social/spec.md](../specs/002-social/spec.md).
+
+| ID | Caso | Tipo | Ref | Archivo |
+|---|---|---|---|---|
+| SOC-01 | El texto compartido tiene nivel, casilleros, tiempo, pistas y link, sin la palabra | `unit` | FR-002 | `src/lib/share.test.ts` |
+| SOC-02 | `submitGuess` devuelve el tiempo y las letras reveladas que registró el servidor | `int` | FR-003 | `share-result.int.test.ts` |
+| SOC-03 | El panel social aparece solo tras acertar; Enter dentro del panel no pasa de palabra | `unit` | FR-001 | `GameEngine.test.tsx` |
+| SOC-04 | Compartir: menú nativo → portapapeles; cancelar no copia | `unit` | FR-001 | `ShareButton.test.tsx` |
+| SOC-10 | Normalización del comentario (vacío, 280, saltos, control, HTML literal) | `unit` | FR-007 | `src/lib/comment-text.test.ts` |
+| SOC-11 | Comentarios bloqueados (ni cantidad) sin acierto, salteada u otra palabra; paginación | `int` | FR-005, FR-009 | `comments.int.test.ts` |
+| SOC-12 | Publicar exige Google + username + acierto; cuerpo inválido rechazado | `int` | FR-006, FR-007 | `comments.int.test.ts` |
+| SOC-13 | Rate limit: simultáneos → uno; 30 s; 20 por día | `int` | FR-008 | `comments.int.test.ts` |
+| SOC-14 | Reporte único por jugador; 3 distintos (simultáneos) ocultan | `int` | FR-010 | `comments.int.test.ts` |
+| SOC-15 | Restaurar exige 3 reportes nuevos | `int` | FR-013 | `comments.int.test.ts` |
+| SOC-16 | Borrado por el autor; moderación solo para admin | `int` | FR-011, FR-012 | `comments.int.test.ts` |
+| SOC-17 | UI de comentarios: invitación, publicar, errores, HTML como texto, reportar/borrar, "ver más" | `unit` | FR-009 | `CommentsPanel.test.tsx` |
+| SOC-20 | Seguir idempotente; rechazos (self, inexistente, invitado, sin username); tope 500 concurrente | `int` | FR-014, FR-015 | `follows.int.test.ts` |
+| SOC-21 | Búsqueda por prefijo con `%`/`_` literales | `int` | FR-016 | `follows.int.test.ts` |
+| SOC-22 | Ranking de amigos; `isMe`/`isFollowed` en rankings, sin `id` | `int` | FR-017..FR-019 | `follows.int.test.ts` |
+| SOC-30 | Código de desafío aleatorio y validación de formato | `unit` | FR-021 | `src/lib/challenge-code.test.ts` |
+| SOC-31 | Crear desafío: idempotente (también concurrente), solo palabra acertada, tope 20/día | `int` | FR-020, FR-021 | `challenges.int.test.ts` |
+| SOC-32 | Página pública sin definición, solución ni ids; estados del visitante | `int` | FR-022, FR-023 | `challenges.int.test.ts` |
+| SOC-33 | Tiempo de servidor desde la primera apertura; un intento; creador no juega; rendirse; orden | `int` | FR-024..FR-029 | `challenges.int.test.ts` |
+| SOC-34 | "Ya la conocía" no gana | `int` | FR-027 | `challenges.int.test.ts` |
+| SOC-35 | Jugar un desafío no cambia neuronas, puntos, tiempo, nivel ni progreso | `int` | FR-028 | `challenges.int.test.ts` |
+| SOC-36 | Mis desafíos (creados y jugados), sin ids | `int` | FR-030 | `challenges.int.test.ts` |
+| SOC-37 | UI del desafío: login con regreso, creador, pool + teclado, error, rendirse, terminado | `unit` | FR-023..FR-025 | `ChallengePlay.test.tsx` |
+
+Verificación por mutación (2026-11-15): quitar el chequeo de acierto en `getWordComments` o la condición `"endTime" IS NULL` al cerrar un intento hace fallar SOC-11 y SOC-33 respectivamente.

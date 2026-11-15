@@ -12,6 +12,7 @@ import { getRandomSuccessMessage, getRandomFailMessage } from '@/lib/messages';
 import { soundManager } from '@/lib/sounds';
 import VictoryParticles from './VictoryParticles';
 import LevelUpModal from './LevelUpModal';
+import SolvedPanel, { type SolvedInfo } from '@/components/social/SolvedPanel';
 
 interface GameEngineProps {
   // Vista pública de la palabra: el navegador nunca recibe la solución (spec 001-hardening, FR-006).
@@ -89,6 +90,8 @@ export default function GameEngine({
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   const [levelStats, setLevelStats] = useState<{ solved: number; total: number } | null>(null);
   const [needsRefresh, setNeedsRefresh] = useState(false);
+  // Resultado del último acierto según el servidor: alimenta compartir/desafiar/comentarios (002-social).
+  const [solvedInfo, setSolvedInfo] = useState<SolvedInfo | null>(null);
 
   // Helper to handle server action errors (detect stale sessions)
   const handleActionError = useCallback((error: any, context: string) => {
@@ -121,6 +124,7 @@ export default function GameEngine({
     setFeedbackMessage(null);
     setMessageType(null);
     setShowParticles(false);
+    setSolvedInfo(null);
   }, []);
 
   // Sync neuronas from session when session loads (for authenticated users)
@@ -147,6 +151,10 @@ export default function GameEngine({
 
   useEffect(() => {
     const handleKeyDown = (e: globalThis.KeyboardEvent) => {
+      // El teclado dentro del panel social (comentarios) no maneja el juego.
+      const target = e.target as HTMLElement | null;
+      if (target && typeof target.closest === 'function' && target.closest('[data-social]')) return;
+
       const { isGuessed: g, isLoadingNext: l, wordLength: wl, revealedIndices: ri, showLevelUpModal: slm } = listenerStateRef.current;
 
       if (e.key === 'Enter') {
@@ -416,6 +424,15 @@ export default function GameEngine({
           setShowParticles(true);
           soundManager.play('success');
           setNeuronas(result.neuronas);
+          if (result.result) {
+            setSolvedInfo({
+              wordId,
+              levelId: result.levelStats.levelId,
+              length: fullInput.length,
+              timeTaken: result.result.timeTaken,
+              revealedIndices: result.result.revealedIndices,
+            });
+          }
           setTimeout(() => setShowParticles(false), 3000);
 
           try {
@@ -703,6 +720,10 @@ export default function GameEngine({
           )}
         </div>
       </div>
+
+      {isGuessed && solvedInfo && (
+        <SolvedPanel solved={solvedInfo} onNeedUsername={() => setNeedsUsername(true)} />
+      )}
 
       <div className="flex justify-center gap-4 text-[#00ffff]/40 font-mono text-[9px] md:text-[10px] tracking-widest uppercase">
         <div className="flex items-center gap-1">

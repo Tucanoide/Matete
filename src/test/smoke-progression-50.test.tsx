@@ -15,6 +15,17 @@ vi.mock('../app/actions/game', () => ({
   getRandomMessage: vi.fn(() => Promise.resolve('¡Excelente!')),
 }));
 
+vi.mock('../app/actions/comments', () => ({
+  getWordComments: vi.fn(() => Promise.resolve({ locked: false, comments: [], nextCursor: null, canPost: false, postBlockedReason: 'login_required' })),
+  postComment: vi.fn(),
+  reportComment: vi.fn(),
+  deleteComment: vi.fn(),
+}))
+
+vi.mock('../app/actions/challenges', () => ({
+  createChallenge: vi.fn(),
+}))
+
 // Mock Sound Manager
 vi.mock('../lib/sounds', () => ({
   soundManager: {
@@ -30,6 +41,7 @@ vi.mock('next-auth/react', () => ({
     update: vi.fn()
   })),
   signOut: vi.fn(),
+  signIn: vi.fn(),
 }));
 
 // Mock Framer Motion to avoid animation delays in tests
@@ -54,6 +66,7 @@ const solved = (i: number, isLevelComplete: boolean) => ({
   points: i,
   isLevelComplete,
   levelStats: { solved: i, total: 50, levelId: 1 },
+  result: { timeTaken: 10, revealedIndices: [] as number[] },
 });
 
 describe('Progression Smoke Test - 50 Words', () => {
