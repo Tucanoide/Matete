@@ -99,7 +99,7 @@ export default function RankingBoard({ onClose, currentLevel }: RankingBoardProp
             <div className="space-y-3">
               {rankingData.map((user, index) => (
                 <motion.div
-                  key={user.id}
+                  key={`${index}-${user.username ?? user.name ?? ''}`}
                   initial={{ x: -20, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   transition={{ delay: index * 0.05 }}

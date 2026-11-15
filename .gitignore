@@ -31,3 +31,6 @@ next-env.d.ts
 
 # prisma
 /generated/prisma
+
+# test env (contiene secretos locales)
+.env.test

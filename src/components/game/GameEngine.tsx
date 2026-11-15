@@ -6,75 +6,78 @@ import { Trophy, Timer as TimerIcon, LayoutGrid, Keyboard, Volume2, VolumeX, Bra
 import UsernameModal from './UsernameModal';
 import InstructionsModal from './InstructionsModal';
 import { useSession, signOut } from 'next-auth/react';
-import { getRandomWordFromLevel, recordWordSolved, useHint, moveToNextLevel, getRandomMessage } from '@/app/actions/game';
+import { getNextWord, submitGuess, startWord, useHint, moveToNextLevel, getRandomMessage } from '@/app/actions/game';
+import type { PublicWord } from '@/lib/public-word';
 import { getRandomSuccessMessage, getRandomFailMessage } from '@/lib/messages';
 import { soundManager } from '@/lib/sounds';
 import VictoryParticles from './VictoryParticles';
 import LevelUpModal from './LevelUpModal';
 
 interface GameEngineProps {
-  initialWord: string;
-  initialDescription: string;
+  // Vista pública de la palabra: el navegador nunca recibe la solución (spec 001-hardening, FR-006).
+  initialWord: PublicWord;
   initialLevel: number;
-  initialWordId: number;
-  initialRevealedIndices?: number[];
   initialNeedsUsername?: boolean;
   initialNeuronas?: number;
 }
 
+const inputFromRevealed = (length: number, revealed: PublicWord['revealed']) => {
+  const input = new Array(length).fill('');
+  revealed.forEach(({ index, letter }) => {
+    if (index >= 0 && index < length) input[index] = letter;
+  });
+  return input;
+};
+
+const firstFreeCursor = (length: number, revealedIdx: number[]) => {
+  let first = 0;
+  while (first < length && revealedIdx.includes(first)) first++;
+  return Math.min(first, length - 1);
+};
+
 export default function GameEngine({
   initialWord,
-  initialDescription,
   initialLevel,
-  initialWordId,
-  initialRevealedIndices = [],
   initialNeedsUsername = false,
   initialNeuronas = 50,
 }: GameEngineProps) {
   const { data: session, update: updateSession } = useSession();
-  
+
   // Game State
-  const [currentWord, setCurrentWord] = useState(initialWord);
-  const [currentWordId, setCurrentWordId] = useState(initialWordId);
-  const [currentDescription, setCurrentDescription] = useState(initialDescription);
+  const [wordLength, setWordLength] = useState(initialWord.length);
+  const [letterPool, setLetterPool] = useState<string[]>(initialWord.pool);
+  const [currentWordId, setCurrentWordId] = useState(initialWord.wordId);
+  const [currentDescription, setCurrentDescription] = useState(initialWord.description);
   const [currentLevel, setCurrentLevel] = useState(initialLevel);
-  const [revealedIndices, setRevealedIndices] = useState<number[]>(initialRevealedIndices);
+  const [revealedIndices, setRevealedIndices] = useState<number[]>(initialWord.revealed.map(r => r.index));
   const [isPoolMode, setIsPoolMode] = useState(true);
   const [needsUsername, setNeedsUsername] = useState(initialNeedsUsername);
   const [showInstructions, setShowInstructions] = useState(false);
   // Local neuronas state — initialized from the server, updated optimistically on spend
   const [neuronas, setNeuronas] = useState(initialNeuronas);
   
-  const [userInput, setUserInput] = useState<string[]>(() => {
-    const input = new Array(initialWord.length).fill('');
-    initialRevealedIndices.forEach(idx => {
-      input[idx] = initialWord[idx].toUpperCase();
-    });
-    return input;
-  });
-  
-  const [cursorPos, setCursorPos] = useState(() => {
-    let first = 0;
-    while (first < initialWord.length && (initialRevealedIndices || []).includes(first)) {
-      first++;
-    }
-    return Math.min(first, initialWord.length - 1);
-  });
+  const [userInput, setUserInput] = useState<string[]>(() =>
+    inputFromRevealed(initialWord.length, initialWord.revealed)
+  );
+
+  const [cursorPos, setCursorPos] = useState(() =>
+    firstFreeCursor(initialWord.length, initialWord.revealed.map(r => r.index))
+  );
 
   const getValidCursor = useCallback((target: number, direction: 'forward' | 'backward') => {
     let current = target;
     if (direction === 'forward') {
-      while (current < currentWord.length && revealedIndices.includes(current)) {
+      while (current < wordLength && revealedIndices.includes(current)) {
         current++;
       }
-      return current; // Can be currentWord.length
+      return current; // Can be wordLength
     } else {
       while (current >= 0 && revealedIndices.includes(current)) {
         current--;
       }
       return Math.max(current, 0);
     }
-  }, [currentWord.length, revealedIndices]);
+  }, [wordLength, revealedIndices]);
 
   const [timer, setTimer] = useState(0);
   const [isGuessed, setIsGuessed] = useState(false);
@@ -96,6 +99,30 @@ export default function GameEngine({
     }
   }, []);
 
+  // Al montar: el servidor crea el invitado (cookie firmada) si hace falta y registra
+  // el momento de entrega de la palabra, que es desde donde mide el tiempo (FR-015/16).
+  useEffect(() => {
+    startWord(initialWord.wordId).catch(error => handleActionError(error, 'starting word'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Carga una palabra nueva (siguiente o primera del nivel) en el estado del juego.
+  const applyWord = useCallback((word: PublicWord) => {
+    const revealedIdx = word.revealed.map(r => r.index);
+    setWordLength(word.length);
+    setLetterPool(word.pool);
+    setCurrentWordId(word.wordId);
+    setCurrentDescription(word.description);
+    setRevealedIndices(revealedIdx);
+    setUserInput(inputFromRevealed(word.length, word.revealed));
+    setCursorPos(firstFreeCursor(word.length, revealedIdx));
+    setTimer(0);
+    setIsGuessed(false);
+    setFeedbackMessage(null);
+    setMessageType(null);
+    setShowParticles(false);
+  }, []);
+
   // Sync neuronas from session when session loads (for authenticated users)
   useEffect(() => {
     if (session?.user?.neuronas !== undefined) {
@@ -113,14 +140,14 @@ export default function GameEngine({
   }, [isGuessed]);
 
   // Ref for all states needed by the keydown listener to avoid frequent re-binding
-  const listenerStateRef = React.useRef({ userInput, cursorPos, currentWord, revealedIndices, isGuessed, isLoadingNext, showLevelUpModal });
+  const listenerStateRef = React.useRef({ userInput, cursorPos, wordLength, revealedIndices, isGuessed, isLoadingNext, showLevelUpModal });
   useEffect(() => {
-    listenerStateRef.current = { userInput, cursorPos, currentWord, revealedIndices, isGuessed, isLoadingNext, showLevelUpModal };
-  }, [userInput, cursorPos, currentWord, revealedIndices, isGuessed, isLoadingNext, showLevelUpModal]);
+    listenerStateRef.current = { userInput, cursorPos, wordLength, revealedIndices, isGuessed, isLoadingNext, showLevelUpModal };
+  }, [userInput, cursorPos, wordLength, revealedIndices, isGuessed, isLoadingNext, showLevelUpModal]);
 
   useEffect(() => {
     const handleKeyDown = (e: globalThis.KeyboardEvent) => {
-      const { isGuessed: g, isLoadingNext: l, currentWord: cw, revealedIndices: ri, showLevelUpModal: slm } = listenerStateRef.current;
+      const { isGuessed: g, isLoadingNext: l, wordLength: wl, revealedIndices: ri, showLevelUpModal: slm } = listenerStateRef.current;
 
       if (e.key === 'Enter') {
         if (g && !l) {
@@ -143,8 +170,8 @@ export default function GameEngine({
             const newInputs = [...prevInputs];
             // If the cursor is at the end (out of range), backtrack to the last valid character
             let actualCursor = prevCursor;
-            if (actualCursor >= currentWord.length) {
-              actualCursor = getValidCursor(currentWord.length - 1, 'backward');
+            if (actualCursor >= wl) {
+              actualCursor = getValidCursor(wl - 1, 'backward');
             }
 
             if (prevInputs[actualCursor] === '' && actualCursor > 0) {
@@ -163,7 +190,7 @@ export default function GameEngine({
         });
       } else if (e.key.length === 1 && /^[a-zA-ZñÑ]$/.test(e.key)) {
         setCursorPos(prevCursor => {
-          if (prevCursor >= cw.length || ri.includes(prevCursor)) return prevCursor;
+          if (prevCursor >= wl || ri.includes(prevCursor)) return prevCursor;
           
           setUserInput(prevInputs => {
             const newInputs = [...prevInputs];
@@ -186,23 +213,9 @@ export default function GameEngine({
   const handleNextWord = async () => {
     setIsLoadingNext(true);
     try {
-      const nextWord = await getRandomWordFromLevel(currentLevel);
+      const nextWord = await getNextWord(currentLevel);
       if (nextWord) {
-        setCurrentWord(nextWord.word);
-        setCurrentWordId(nextWord.id);
-        setCurrentDescription(nextWord.description);
-        
-        // Correct initialization for a NEW word (no hints yet)
-        const input = new Array(nextWord.word.length).fill('');
-        setUserInput(input);
-        setRevealedIndices([]);
-        setCursorPos(0);
-        
-        setTimer(0);
-        setIsGuessed(false);
-        setFeedbackMessage(null);
-        setMessageType(null);
-        setShowParticles(false);
+        applyWord(nextWord);
         soundManager.play('new_word');
       }
     } catch (error) {
@@ -226,21 +239,8 @@ export default function GameEngine({
       const result = await moveToNextLevel();
       if (result.success && result.nextWord) {
         setCurrentLevel(result.nextLevelId);
-        setCurrentWord(result.nextWord.word);
-        setCurrentWordId(result.nextWord.id);
-        setCurrentDescription(result.nextWord.description);
-        
-        // Correct initialization for the first word of next level
-        const input = new Array(result.nextWord.word.length).fill('');
-        setUserInput(input);
-        setRevealedIndices([]);
-        setCursorPos(0);
-        
-        setTimer(0);
-        setIsGuessed(false);
-        setFeedbackMessage(null);
-        setMessageType(null);
-        setShowParticles(false);
+        applyWord(result.nextWord);
+        setNeuronas(result.neuronas);
         setShowLevelUpModal(false);
         soundManager.play('new_word');
         await updateSession();
@@ -266,7 +266,7 @@ export default function GameEngine({
       }
       await updateSession();
       
-      if (result.isLevelComplete && result.levelStats) {
+      if ('isLevelComplete' in result && result.isLevelComplete && result.levelStats) {
         handleLevelComplete(result.levelStats);
         setIsLoadingNext(false);
       } else {
@@ -295,7 +295,7 @@ export default function GameEngine({
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.slice(-1); // Get last char
     if (val && /^[a-zA-ZñÑ]$/.test(val)) {
-      if (cursorPos >= currentWord.length || revealedIndices.includes(cursorPos)) return;
+      if (cursorPos >= wordLength || revealedIndices.includes(cursorPos)) return;
       const newInputs = [...userInput];
       newInputs[cursorPos] = val.toUpperCase();
       setUserInput(newInputs);
@@ -312,8 +312,8 @@ export default function GameEngine({
       const newInputs = [...userInput];
       
       let actualCursor = cursorPos;
-      if (actualCursor >= currentWord.length) {
-        actualCursor = getValidCursor(currentWord.length - 1, 'backward');
+      if (actualCursor >= wordLength) {
+        actualCursor = getValidCursor(wordLength - 1, 'backward');
       }
 
       if (userInput[actualCursor] === '' && actualCursor > 0) {
@@ -337,22 +337,7 @@ export default function GameEngine({
     }
   };
 
-  // Generate Letter Pool (14 letters)
-  const letterPool = React.useMemo(() => {
-    const solutionLetters = currentWord.toUpperCase().split('');
-    const poolSize = 14;
-    const fillersNeeded = poolSize - solutionLetters.length;
-    
-    // Distractor logic: Common vowels and tricky consonants
-    const commonDistractors = 'AEIOURSTNMPL';
-    const distractors: string[] = [];
-    for (let i = 0; i < fillersNeeded; i++) {
-      distractors.push(commonDistractors[Math.floor(Math.random() * commonDistractors.length)]);
-    }
-    
-    // Shuffle solution + distractors
-    return [...solutionLetters, ...distractors].sort(() => Math.random() - 0.5);
-  }, [currentWord]);
+  // El pool de 14 letras (solución + distractores, desordenado) lo genera el servidor.
 
   // Track used indices from pool to gray them out
   // We need to know WHICH instance of a letter is used.
@@ -407,55 +392,71 @@ export default function GameEngine({
     setFeedbackMessage(null);
   };
 
+  // Cada intento completo lo valida el servidor (submitGuess): el navegador no conoce
+  // la solución. checkSeq descarta respuestas viejas si el jugador siguió escribiendo.
+  const checkSeq = React.useRef(0);
+
   useEffect(() => {
     if (isGuessed) return;
+    const fullInput = userInput.join('');
+    if (fullInput.length !== wordLength || userInput.includes('')) return;
+
+    const seq = ++checkSeq.current;
+    const wordId = currentWordId;
+
     const checkWord = async () => {
-      const fullInput = userInput.join('');
-      if (fullInput.length === currentWord.length && !userInput.includes('')) {
-        if (fullInput === currentWord.toUpperCase()) {
+      try {
+        const result = await submitGuess(wordId, fullInput);
+        if (seq !== checkSeq.current) return;
+
+        if ('correct' in result && result.correct) {
           setIsGuessed(true);
           setMessageType('success');
-          
+          setFeedbackMessage('¡Excelente!');
+          setShowParticles(true);
+          soundManager.play('success');
+          setNeuronas(result.neuronas);
+          setTimeout(() => setShowParticles(false), 3000);
+
           try {
-            // Give immediate feedback even if server is slow
-            setFeedbackMessage('¡Excelente!');
-            setShowParticles(true);
-            soundManager.play('success');
-            
-            // Then fetch the dynamic message and record progress
-            const [msg, result] = await Promise.all([
-               getRandomMessage('success'),
-               recordWordSolved(currentWordId, timer)
-            ]);
-            
+            const msg = await getRandomMessage('success');
             if (msg) setFeedbackMessage(msg);
             await updateSession();
-            
-            if (result.success && result.isLevelComplete && result.levelStats) {
-              handleLevelComplete(result.levelStats);
-            }
           } catch (error) {
-            handleActionError(error, 'recording word solved');
-            // Even if recording fails, at least felicitate the user
-          } finally {
-            setTimeout(() => setShowParticles(false), 3000);
+            handleActionError(error, 'fetching success message');
           }
-        } else {
-          try {
-            const msg = await getRandomMessage('fail');
-            setFeedbackMessage(msg);
-            setMessageType('fail');
-            soundManager.play('fail');
-          } catch (error) {
-            handleActionError(error, 'checking word (fail path)');
-            setFeedbackMessage('Esa no es la palabra correcta...');
-            setMessageType('fail');
+
+          if (result.isLevelComplete && result.levelStats) {
+            handleLevelComplete(result.levelStats);
           }
+          return;
         }
+
+        if ('error' in result && result.error === 'not_in_play') {
+          // La palabra dejó de estar en juego (otra pestaña, nivel cambiado): pedir otra.
+          await handleNextWord();
+          return;
+        }
+
+        try {
+          const msg = await getRandomMessage('fail');
+          if (seq !== checkSeq.current) return;
+          setFeedbackMessage(msg);
+        } catch (error) {
+          handleActionError(error, 'checking word (fail path)');
+          setFeedbackMessage('Esa no es la palabra correcta...');
+        }
+        setMessageType('fail');
+        soundManager.play('fail');
+      } catch (error) {
+        handleActionError(error, 'submitting guess');
+        setFeedbackMessage('No pudimos verificar la palabra. Probá de nuevo.');
+        setMessageType('fail');
       }
     };
     checkWord();
-  }, [userInput, currentWord, currentWordId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userInput, wordLength, currentWordId]);
 
   const handleGiveHint = async () => {
     if (isGuessed || isLoadingNext) return;
@@ -463,19 +464,20 @@ export default function GameEngine({
     setIsLoadingNext(true);
     try {
       const result = await useHint(currentWordId, 'letter');
-      if (result.success && result.revealedIndices) {
-        setRevealedIndices(result.revealedIndices);
-        const newInputs = [...userInput];
-        result.revealedIndices.forEach(idx => {
-          newInputs[idx] = currentWord[idx].toUpperCase();
+      if (result.success && 'revealed' in result) {
+        const { index, letter } = result.revealed;
+        setRevealedIndices(prev => (prev.includes(index) ? prev : [...prev, index]));
+        setUserInput(prev => {
+          const newInputs = [...prev];
+          newInputs[index] = letter;
+          return newInputs;
         });
-        setUserInput(newInputs);
         // Update local neuronas immediately so button enables/disables correctly
         if (result.remainingNeuronas !== undefined) {
           setNeuronas(result.remainingNeuronas);
         }
         await updateSession();
-      } else if (result.error) {
+      } else if (!result.success) {
          setFeedbackMessage(result.error);
          setMessageType('fail');
       }

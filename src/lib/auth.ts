@@ -22,7 +22,7 @@ export const authOptions: NextAuthOptions = {
         
         session.user.id = user.id;
         session.user.points = dbUser?.points ?? 0;
-        session.user.neuronas = dbUser?.neuronas ?? 150;
+        session.user.neuronas = dbUser?.neuronas ?? 50;
         session.user.levelId = dbUser?.levelId ?? 1;
       }
       return session;

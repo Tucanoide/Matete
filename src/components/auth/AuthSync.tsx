@@ -16,7 +16,7 @@ export function AuthSync() {
       const performSync = async () => {
         try {
           const result = await migrateGuestProgress();
-          if (result.success && result.message !== 'No guest data to migrate') {
+          if (result.success && result.migrated) {
             console.log('Progress migrated from guest to authenticated account');
             // We could force a session update here if needed, 
             // but migrateGuestProgress already updated the DB.
