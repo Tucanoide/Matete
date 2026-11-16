@@ -63,7 +63,7 @@ type PublicWord = {
 - `correct: false` no modifica nada y no revela qué letras fallaron.
 - Una palabra ya acertada responde `correct: true, alreadySolved: true` (idempotente). Una salteada o de otro nivel: `not_in_play`.
 
-## useHint(wordId, type) — modificada
+## requestHint(wordId, type) — modificada
 
 ```ts
 (wordId: number, type: 'letter' | 'skip') => Promise<

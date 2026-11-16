@@ -106,3 +106,19 @@ describe('[SOC-17] CommentsPanel', () => {
     expect(screen.queryByText('Ver más comentarios')).not.toBeInTheDocument()
   })
 })
+
+describe('[SOC-25] CommentsPanel al cambiar de palabra', () => {
+  it('descarta la respuesta de la palabra anterior', async () => {
+    let resolveOld: (v: unknown) => void = () => {}
+    vi.mocked(getWordComments)
+      .mockImplementationOnce(() => new Promise((r) => { resolveOld = r }) as never)
+      .mockResolvedValueOnce({ locked: false, comments: [comment('n1', 'De la nueva')], nextCursor: null, canPost: false, postBlockedReason: 'login_required' })
+    const { rerender } = render(<CommentsPanel wordId={1} />)
+    rerender(<CommentsPanel wordId={2} />)
+    expect(await screen.findByText('De la nueva')).toBeInTheDocument()
+    resolveOld({ locked: false, comments: [comment('o1', 'De la vieja')], nextCursor: null, canPost: false, postBlockedReason: 'login_required' })
+    await new Promise((r) => setTimeout(r, 20))
+    expect(screen.queryByText('De la vieja')).not.toBeInTheDocument()
+    expect(screen.getByText('De la nueva')).toBeInTheDocument()
+  })
+})

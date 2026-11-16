@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Trophy, Clock, Brain, User, X } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import FollowButton from '@/components/social/FollowButton';
@@ -13,10 +13,24 @@ interface RankingBoardProps {
   currentLevel: number;
 }
 
+/** Fila de cualquiera de los dos rankings (global o por nivel). */
+type RankingRow = {
+  name: string | null;
+  username: string | null;
+  image: string | null;
+  isMe: boolean;
+  isFollowed: boolean;
+  points?: number;
+  totalTime?: number;
+  neuronas?: number;
+  levelPoints?: number;
+  levelTime?: number;
+};
+
 export default function RankingBoard({ onClose, currentLevel }: RankingBoardProps) {
   const { status } = useSession();
   const [activeTab, setActiveTab] = useState<'global' | 'level' | 'friends'>('global');
-  const [rankingData, setRankingData] = useState<any[]>([]);
+  const [rankingData, setRankingData] = useState<RankingRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -131,7 +145,9 @@ export default function RankingBoard({ onClose, currentLevel }: RankingBoardProp
                   
                   <div className="w-10 h-10 rounded-full border border-[#ff00ff]/40 overflow-hidden bg-[#1a1033]">
                     {user.image ? (
-                      <img src={user.image} alt={user.name} className="w-full h-full object-cover" />
+                      // Avatar de Google (host externo variable): <img> a propósito.
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={user.image} alt={user.name ?? ""} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-[#ff00ff]/10">
                         <User className="w-6 h-6 text-[#ff00ff]/50" />
@@ -148,7 +164,7 @@ export default function RankingBoard({ onClose, currentLevel }: RankingBoardProp
                         <Trophy className="w-3 h-3" /> {activeTab === 'level' ? user.levelPoints : user.points} P
                       </div>
                       <div className="flex items-center gap-1 text-[10px] font-mono text-[#00ffff]/80 whitespace-nowrap">
-                        <Clock className="w-3 h-3" /> {formatTime(activeTab === 'level' ? user.levelTime : user.totalTime)}
+                        <Clock className="w-3 h-3" /> {formatTime((activeTab === "level" ? user.levelTime : user.totalTime) ?? 0)}
                       </div>
                       {activeTab === 'global' && (
                         <div className="flex items-center gap-1 text-[10px] font-mono text-green-400/80 whitespace-nowrap">

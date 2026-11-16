@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Brain, MousePointer2, Lightbulb, Trophy, Sparkles, ArrowRight, Info, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, Brain, MousePointer2, Lightbulb, Sparkles, ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface InstructionsModalProps {
   isOpen: boolean;
@@ -38,6 +38,8 @@ export default function InstructionsModal({ isOpen, onClose }: InstructionsModal
 
   const nextExample = () => setExampleIndex((prev) => (prev + 1) % DIVERGENT_EXAMPLES.length);
   const prevExample = () => setExampleIndex((prev) => (prev - 1 + DIVERGENT_EXAMPLES.length) % DIVERGENT_EXAMPLES.length);
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-[#050510]/95 backdrop-blur-xl overflow-y-auto">
@@ -92,7 +94,7 @@ export default function InstructionsModal({ isOpen, onClose }: InstructionsModal
                     className="space-y-3"
                   >
                     <div className="text-xs font-mono uppercase text-[#ff00ff]/60 tracking-widest">Ejemplo {exampleIndex + 1}</div>
-                    <p className="italic font-bold text-lg text-white">"{DIVERGENT_EXAMPLES[exampleIndex].definition}"</p>
+                    <p className="italic font-bold text-lg text-white">&ldquo;{DIVERGENT_EXAMPLES[exampleIndex].definition}&rdquo;</p>
                     
                     <div className="flex items-center justify-center gap-2 py-2">
                        {DIVERGENT_EXAMPLES[exampleIndex].parts.map((part, i) => (

@@ -80,7 +80,7 @@ src/
 │   ├── page.tsx                         # MOD: pasa PublicWord al GameEngine
 │   └── actions/
 │       ├── game.ts                      # MOD: getUser/ensureUser, submitGuess, startWord,
-│       │                                #      getNextWord, useHint, moveToNextLevel, rankings
+│       │                                #      getNextWord, requestHint, moveToNextLevel, rankings
 │       └── sync.ts                      # MOD: migración atómica e idempotente
 ├── lib/
 │   ├── auth.ts                          # MOD: fallback de neuronas 150 → 50

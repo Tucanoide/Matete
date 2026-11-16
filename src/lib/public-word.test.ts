@@ -3,7 +3,7 @@ import { buildLetterPool, toPublicWord, isValidGuessFormat, isCorrectGuess, POOL
 
 const count = (arr: string[], ch: string) => arr.filter((c) => c === ch).length
 
-describe('public-word (FR-006, FR-009)', () => {
+describe('[GAME-01] [GAME-13] public-word (FR-006, FR-009)', () => {
   it('el pool tiene 14 letras e incluye todas las de la solución con su multiplicidad', () => {
     for (let n = 0; n < 50; n++) {
       const pool = buildLetterPool('Sencilla')

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import prisma from '@/lib/prisma'
 import { migrateGuestProgress } from '@/app/actions/sync'
-import { startWord, submitGuess, useHint } from '@/app/actions/game'
+import { startWord, submitGuess, requestHint } from '@/app/actions/game'
 import { GUEST_COOKIE, LEGACY_GUEST_COOKIE, verifyGuestToken } from '@/lib/guest-cookie'
 import { jar, loginAs, createRegisteredUser, getUserById, WORDS } from './harness'
 
@@ -15,13 +15,13 @@ async function playAsGuest() {
   await startWord(W1.id)
   const guestId = verifyGuestToken(jar.get(GUEST_COOKIE)!.value)!
   await submitGuess(W1.id, 'MUDANZA') // +10 → 60, +1 punto
-  await useHint(W2.id, 'skip') // −15 → 45
-  await useHint(W3.id, 'letter') // −5 → 40
+  await requestHint(W2.id, 'skip') // −15 → 45
+  await requestHint(W3.id, 'letter') // −5 → 40
   return guestId
 }
 
 describe('US3 migración invitado → Google', () => {
-  it('un invitado con progreso migra completo y el invitado deja de existir (FR-018, US3-1)', async () => {
+  it('[SYNC-01] [SYNC-03] un invitado con progreso migra completo y el invitado deja de existir (FR-018, US3-1)', async () => {
     const guestId = await playAsGuest()
     const account = await createRegisteredUser(EMAIL, { neuronas: 50 })
     loginAs(EMAIL)
@@ -49,7 +49,7 @@ describe('US3 migración invitado → Google', () => {
     expect(u.neuronas).toBe(50)
   })
 
-  it('recargar 10 veces después de migrar no cambia los totales (FR-020, SC-005)', async () => {
+  it('[SYNC-02] recargar 10 veces después de migrar no cambia los totales (FR-020, SC-005)', async () => {
     await playAsGuest()
     const account = await createRegisteredUser(EMAIL)
     loginAs(EMAIL)
@@ -62,7 +62,7 @@ describe('US3 migración invitado → Google', () => {
     expect(await getUserById(account.id)).toEqual(after)
   })
 
-  it('migraciones concurrentes (dos pestañas) ocurren una sola vez', async () => {
+  it('[SYNC-08] migraciones concurrentes (dos pestañas) ocurren una sola vez', async () => {
     await startWord(W1.id)
     await submitGuess(W1.id, 'MUDANZA')
     const account = await createRegisteredUser(EMAIL)
@@ -75,7 +75,7 @@ describe('US3 migración invitado → Google', () => {
     expect(await prisma.progress.count({ where: { userId: account.id } })).toBe(1)
   })
 
-  it('neuronas excedentes del invitado se suman (FR-021)', async () => {
+  it('[SYNC-03] neuronas excedentes del invitado se suman (FR-021)', async () => {
     await startWord(W1.id)
     await submitGuess(W1.id, 'MUDANZA') // invitado queda con 60
     const account = await createRegisteredUser(EMAIL, { neuronas: 100 })
@@ -84,7 +84,7 @@ describe('US3 migración invitado → Google', () => {
     expect((await getUserById(account.id)).neuronas).toBe(110)
   })
 
-  it('una palabra resuelta por ambos cuenta una sola vez (FR-022, US3-5)', async () => {
+  it('[SYNC-04] una palabra resuelta por ambos cuenta una sola vez (FR-022, US3-5)', async () => {
     const account = await createRegisteredUser(EMAIL, { points: 1, totalTime: 30 })
     await prisma.progress.create({ data: { userId: account.id, wordId: W1.id, guessed: true, timeTaken: 30 } })
 
@@ -100,7 +100,7 @@ describe('US3 migración invitado → Google', () => {
     expect(p.timeTaken).toBe(30)
   })
 
-  it('el nivel resultante es el mayor de los dos', async () => {
+  it('[SYNC-01] el nivel resultante es el mayor de los dos', async () => {
     await startWord(W1.id)
     const guestId = verifyGuestToken(jar.get(GUEST_COOKIE)!.value)!
     await prisma.user.update({ where: { id: guestId }, data: { levelId: 2 } })
@@ -110,7 +110,7 @@ describe('US3 migración invitado → Google', () => {
     expect((await getUserById(account.id)).levelId).toBe(2)
   })
 
-  it('invitado sin progreso: se borra sin error', async () => {
+  it('[SYNC-01] invitado sin progreso: se borra sin error', async () => {
     await startWord(WORDS.L2[0].id) // not_in_play: crea el invitado sin progreso
     const guestId = verifyGuestToken(jar.get(GUEST_COOKIE)!.value)!
     expect(await prisma.progress.count({ where: { userId: guestId } })).toBe(0)
@@ -120,7 +120,7 @@ describe('US3 migración invitado → Google', () => {
     expect(await prisma.user.findUnique({ where: { id: guestId } })).toBeNull()
   })
 
-  it('sin cookie de invitado no hay nada que migrar; sin sesión, error', async () => {
+  it('[SYNC-05] [SYNC-06] sin cookie de invitado no hay nada que migrar; sin sesión, error', async () => {
     expect(await migrateGuestProgress()).toEqual({ success: false, error: 'No authenticated session' })
     await createRegisteredUser(EMAIL)
     loginAs(EMAIL)

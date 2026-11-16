@@ -62,6 +62,8 @@ export default function Header() {
             <div className="flex items-center gap-3 bg-[#1a1033]/60 border border-[#0088ff]/30 py-1.5 pl-1.5 pr-4 rounded-full">
               <div className="w-8 h-8 rounded-full border border-[#00ffff]/40 overflow-hidden">
                 {session.user?.image ? (
+                  // Avatar de Google (host externo variable): <img> en lugar de next/image a propósito.
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={session.user.image} alt={session.user.name || ''} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center bg-[#00ffff]/10">

@@ -38,8 +38,8 @@ type PublicWord = {
 - `buildPublicWord(word, revealedIndices)` en `src/lib/public-word.ts` genera el pool en el servidor con la misma lógica que hoy tiene el cliente (distractores de `AEIOURSTNMPL`, shuffle Fisher–Yates en lugar de `sort(random)`).
 - Nueva action `submitGuess(wordId, guess)`: compara `guess.toUpperCase() === word.word.toUpperCase()` (regla actual; las 486 palabras usan solo letras y ñ, largo 4–11). Responde `{ correct: false }` sin detalle, o `{ correct: true, solution, ... }` (FR-010).
 - `submitGuess` reemplaza a `recordWordSolved` como única vía de acreditación; `recordWordSolved` se elimina.
-- `useHint('letter')` devuelve `{ index, letter }` (FR-009).
-- Una palabra está **en juego** para un jugador si `word.levelId === user.levelId` y no tiene `Progress` con `guessed` o `skipped`. `submitGuess` y `useHint` rechazan cualquier otra.
+- `requestHint('letter')` devuelve `{ index, letter }` (FR-009).
+- Una palabra está **en juego** para un jugador si `word.levelId === user.levelId` y no tiene `Progress` con `guessed` o `skipped`. `submitGuess` y `requestHint` rechazan cualquier otra.
 
 **Alternatives considered**:
 - *Enviar la solución cifrada u ofuscada*: la clave también estaría en el cliente; no cumple FR-006.

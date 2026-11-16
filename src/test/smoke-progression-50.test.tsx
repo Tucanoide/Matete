@@ -10,7 +10,7 @@ vi.mock('../app/actions/game', () => ({
   getNextWord: vi.fn(),
   startWord: vi.fn(() => Promise.resolve({ ok: true })),
   submitGuess: vi.fn(),
-  useHint: vi.fn(),
+  requestHint: vi.fn(),
   moveToNextLevel: vi.fn(),
   getRandomMessage: vi.fn(() => Promise.resolve('¡Excelente!')),
 }));
@@ -46,15 +46,15 @@ vi.mock('next-auth/react', () => ({
 
 // Mock Framer Motion to avoid animation delays in tests
 vi.mock('framer-motion', async () => {
-  const actual = await vi.importActual('framer-motion') as any;
+  const actual = await vi.importActual<typeof import('framer-motion')>('framer-motion');
   return {
     ...actual,
     motion: {
       ...actual.motion,
-      div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-      button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+      div: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+      button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props}>{children}</button>,
     },
-    AnimatePresence: ({ children }: any) => <>{children}</>,
+    AnimatePresence: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   };
 });
 
@@ -80,7 +80,7 @@ describe('Progression Smoke Test - 50 Words', () => {
     );
   });
 
-  it('should pass to level-up state after 50 words are solved', async () => {
+  it('[GAME-11] [PROG-01] should pass to level-up state after 50 words are solved', async () => {
     const user = userEvent.setup();
 
     render(<GameEngine initialWord={initialWord} initialLevel={initialLevel} />);

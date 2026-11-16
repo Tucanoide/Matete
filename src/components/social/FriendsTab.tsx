@@ -28,33 +28,38 @@ export default function FriendsTab({ onNeedUsername }: { onNeedUsername?: () => 
   const [state, setState] = useState<'loading' | 'ready' | 'login_required' | 'username_required' | 'error'>('loading');
   const [entries, setEntries] = useState<FriendsRankingEntry[]>([]);
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Player[] | null>(null);
+  const [searchResults, setResults] = useState<Player[] | null>(null);
+  // Con menos de 2 letras no se muestran resultados (derivado, sin setState en el efecto).
+  const results = query.trim().replace(/^@/, '').length < 2 ? null : searchResults;
 
-  const loadRanking = useCallback(async () => {
-    try {
-      const r = await getFriendsRanking();
-      if (r.ok) {
-        setEntries(r.entries);
-        setState('ready');
-      } else {
-        setState(r.error);
-      }
-    } catch {
-      setState('error');
+  const applyRanking = useCallback((r: Awaited<ReturnType<typeof getFriendsRanking>>) => {
+    if (r.ok) {
+      setEntries(r.entries);
+      setState('ready');
+    } else {
+      setState(r.error);
     }
   }, []);
 
+  const loadRanking = useCallback(() => {
+    getFriendsRanking().then(applyRanking, () => setState('error'));
+  }, [applyRanking]);
+
   useEffect(() => {
-    loadRanking();
-  }, [loadRanking]);
+    let active = true;
+    getFriendsRanking().then(
+      (r) => active && applyRanking(r),
+      () => active && setState('error')
+    );
+    return () => {
+      active = false;
+    };
+  }, [applyRanking]);
 
   // Búsqueda con espera corta: un pedido por pausa de tipeo, no por tecla (constitución 7).
   useEffect(() => {
     const q = query.trim().replace(/^@/, '');
-    if (q.length < 2) {
-      setResults(null);
-      return;
-    }
+    if (q.length < 2) return;
     const t = setTimeout(async () => {
       const r = await searchPlayers(q);
       setResults(r.ok ? r.players : []);

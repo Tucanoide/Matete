@@ -1,18 +1,18 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Timer as TimerIcon, LayoutGrid, Keyboard, Volume2, VolumeX, Brain, Trash2, HelpCircle, Lightbulb, Sparkles, User as UserIcon, SkipForward, ChevronRight, X, Clock } from 'lucide-react';
+import { Trophy, Timer as TimerIcon, LayoutGrid, Keyboard, Volume2, VolumeX, Brain, Trash2, Lightbulb, SkipForward, ChevronRight, Clock } from 'lucide-react';
 import UsernameModal from './UsernameModal';
 import InstructionsModal from './InstructionsModal';
-import { useSession, signOut } from 'next-auth/react';
-import { getNextWord, submitGuess, startWord, useHint, moveToNextLevel, getRandomMessage } from '@/app/actions/game';
+import { useSession } from 'next-auth/react';
+import { getNextWord, submitGuess, startWord, requestHint, moveToNextLevel, getRandomMessage } from '@/app/actions/game';
 import type { PublicWord } from '@/lib/public-word';
-import { getRandomSuccessMessage, getRandomFailMessage } from '@/lib/messages';
 import { soundManager } from '@/lib/sounds';
 import VictoryParticles from './VictoryParticles';
 import LevelUpModal from './LevelUpModal';
 import SolvedPanel, { type SolvedInfo } from '@/components/social/SolvedPanel';
+import GameOverPanel from './GameOverPanel';
 
 interface GameEngineProps {
   // Vista pública de la palabra: el navegador nunca recibe la solución (spec 001-hardening, FR-006).
@@ -20,7 +20,17 @@ interface GameEngineProps {
   initialLevel: number;
   initialNeedsUsername?: boolean;
   initialNeuronas?: number;
+  /** Costos que cobra el servidor (HINT-09): el cliente solo los muestra. */
+  initialCosts?: { letter: number; skip: number };
 }
+
+const DEFAULT_COSTS = { letter: 5, skip: 15 };
+
+// UI-16: el user agent se lee solo en el navegador; en el servidor se asume escritorio.
+const MOBILE_UA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+const noopSubscribe = () => () => {};
+const isMobileClient = () => typeof navigator !== 'undefined' && MOBILE_UA.test(navigator.userAgent);
+const isMobileServer = () => false;
 
 const inputFromRevealed = (length: number, revealed: PublicWord['revealed']) => {
   const input = new Array(length).fill('');
@@ -41,7 +51,9 @@ export default function GameEngine({
   initialLevel,
   initialNeedsUsername = false,
   initialNeuronas = 50,
+  initialCosts = DEFAULT_COSTS,
 }: GameEngineProps) {
+  const costs = initialCosts;
   const { data: session, update: updateSession } = useSession();
 
   // Game State
@@ -92,11 +104,14 @@ export default function GameEngine({
   const [needsRefresh, setNeedsRefresh] = useState(false);
   // Resultado del último acierto según el servidor: alimenta compartir/desafiar/comentarios (002-social).
   const [solvedInfo, setSolvedInfo] = useState<SolvedInfo | null>(null);
+  // Terminó todos los niveles (PROG-09).
+  const [gameOver, setGameOver] = useState(false);
+  const isMobile = useSyncExternalStore(noopSubscribe, isMobileClient, isMobileServer);
 
   // Helper to handle server action errors (detect stale sessions)
-  const handleActionError = useCallback((error: any, context: string) => {
+  const handleActionError = useCallback((error: unknown, context: string) => {
     console.error(`Error in ${context}:`, error);
-    const errorMsg = error?.message || String(error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
     if (errorMsg.includes('UnrecognizedActionError') || errorMsg.includes('not found on the server')) {
       setNeedsRefresh(true);
     }
@@ -127,12 +142,15 @@ export default function GameEngine({
     setSolvedInfo(null);
   }, []);
 
-  // Sync neuronas from session when session loads (for authenticated users)
-  useEffect(() => {
-    if (session?.user?.neuronas !== undefined) {
-      setNeuronas(session.user.neuronas);
-    }
-  }, [session?.user?.neuronas]);
+  // Las neuronas de la sesión (usuario de Google) pisan el valor local cuando cambian.
+  // Se ajusta durante el render en lugar de un efecto (evita un render en cascada).
+  const sessionNeuronas = session?.user?.neuronas;
+  // Arranca en undefined para que una sesión ya cargada al montar también se aplique (UI-21).
+  const [seenSessionNeuronas, setSeenSessionNeuronas] = useState<number | undefined>(undefined);
+  if (sessionNeuronas !== seenSessionNeuronas) {
+    setSeenSessionNeuronas(sessionNeuronas);
+    if (sessionNeuronas !== undefined) setNeuronas(sessionNeuronas);
+  }
 
   // Timer logic
   useEffect(() => {
@@ -142,6 +160,8 @@ export default function GameEngine({
     }, 1000);
     return () => clearInterval(interval);
   }, [isGuessed]);
+
+  const handlersRef = React.useRef({ nextWord: () => {}, startNextLevel: () => {} });
 
   // Ref for all states needed by the keydown listener to avoid frequent re-binding
   const listenerStateRef = React.useRef({ userInput, cursorPos, wordLength, revealedIndices, isGuessed, isLoadingNext, showLevelUpModal });
@@ -159,10 +179,11 @@ export default function GameEngine({
 
       if (e.key === 'Enter') {
         if (g && !l) {
+          // Siempre la versión vigente de los handlers (no la del render en que se registró el listener).
           if (slm) {
-            handleStartNextLevel();
+            handlersRef.current.startNextLevel();
           } else {
-            handleNextWord();
+            handlersRef.current.nextWord();
           }
         }
         return;
@@ -170,45 +191,35 @@ export default function GameEngine({
 
       if (g || l) return;
 
+      // UI-19: se calcula el próximo estado desde la referencia y se aplica con dos setState
+      // independientes (antes había un setState dentro del updater de otro y el segundo
+      // Backspace no borraba). La referencia se actualiza en el acto para teclas seguidas.
+      const state = listenerStateRef.current;
       if (e.key === 'Backspace') {
-        setCursorPos(prevCursor => {
-          let targetCursor = prevCursor;
-          
-          setUserInput(prevInputs => {
-            const newInputs = [...prevInputs];
-            // If the cursor is at the end (out of range), backtrack to the last valid character
-            let actualCursor = prevCursor;
-            if (actualCursor >= wl) {
-              actualCursor = getValidCursor(wl - 1, 'backward');
-            }
-
-            if (prevInputs[actualCursor] === '' && actualCursor > 0) {
-              const prev = getValidCursor(actualCursor - 1, 'backward');
-              newInputs[prev] = '';
-              targetCursor = prev;
-            } else {
-              newInputs[actualCursor] = '';
-              targetCursor = actualCursor;
-            }
-            return newInputs;
-          });
-          
-          setFeedbackMessage(null);
-          return targetCursor;
-        });
+        const newInputs = [...state.userInput];
+        let actualCursor = state.cursorPos;
+        if (actualCursor >= wl) actualCursor = getValidCursor(wl - 1, 'backward');
+        let targetCursor = actualCursor;
+        if (state.userInput[actualCursor] === '' && actualCursor > 0) {
+          targetCursor = getValidCursor(actualCursor - 1, 'backward');
+        }
+        if (!ri.includes(targetCursor)) newInputs[targetCursor] = '';
+        state.userInput = newInputs;
+        state.cursorPos = targetCursor;
+        setUserInput(newInputs);
+        setCursorPos(targetCursor);
+        setFeedbackMessage(null);
       } else if (e.key.length === 1 && /^[a-zA-ZñÑ]$/.test(e.key)) {
-        setCursorPos(prevCursor => {
-          if (prevCursor >= wl || ri.includes(prevCursor)) return prevCursor;
-          
-          setUserInput(prevInputs => {
-            const newInputs = [...prevInputs];
-            newInputs[prevCursor] = e.key.toUpperCase();
-            return newInputs;
-          });
-          
-          setFeedbackMessage(null);
-          return getValidCursor(prevCursor + 1, 'forward');
-        });
+        const cursor = state.cursorPos;
+        if (cursor >= wl || ri.includes(cursor)) return;
+        const newInputs = [...state.userInput];
+        newInputs[cursor] = e.key.toUpperCase();
+        const next = getValidCursor(cursor + 1, 'forward');
+        state.userInput = newInputs;
+        state.cursorPos = next;
+        setUserInput(newInputs);
+        setCursorPos(next);
+        setFeedbackMessage(null);
       }
     };
 
@@ -245,7 +256,11 @@ export default function GameEngine({
     setIsLoadingNext(true);
     try {
       const result = await moveToNextLevel();
-      if (result.success && result.nextWord) {
+      if (!result.success && result.gameOver) {
+        setShowLevelUpModal(false);
+        setGameOver(true);
+        soundManager.play('level_up');
+      } else if (result.success && result.nextWord) {
         setCurrentLevel(result.nextLevelId);
         applyWord(result.nextWord);
         setNeuronas(result.neuronas);
@@ -263,27 +278,39 @@ export default function GameEngine({
   // (Old handleGiveHint removed)
 
   const handleSkip = async () => {
-    if (neuronas < 15 || isGuessed || isLoadingNext) return;
-    
+    if (neuronas < costs.skip || isGuessed || isLoadingNext) return;
+
     setIsLoadingNext(true);
-    const result = await useHint(currentWordId, 'skip');
-    if (result.success) {
-      // Update local neuronas immediately
-      if (result.remainingNeuronas !== undefined) {
-        setNeuronas(result.remainingNeuronas);
-      }
-      await updateSession();
-      
-      if ('isLevelComplete' in result && result.isLevelComplete && result.levelStats) {
-        handleLevelComplete(result.levelStats);
-        setIsLoadingNext(false);
+    try {
+      const result = await requestHint(currentWordId, 'skip');
+      if (result.success) {
+        if (result.remainingNeuronas !== undefined) {
+          setNeuronas(result.remainingNeuronas);
+        }
+        await updateSession();
+
+        if ('isLevelComplete' in result && result.isLevelComplete && result.levelStats) {
+          handleLevelComplete(result.levelStats);
+        } else {
+          await handleNextWord();
+        }
       } else {
-        await handleNextWord();
+        setFeedbackMessage(result.error);
+        setMessageType('fail');
       }
-    } else {
+    } catch (error) {
+      // HINT-10: un error no deja el juego trabado.
+      handleActionError(error, 'skipping word');
+      setFeedbackMessage('No pudimos saltar la palabra. Probá de nuevo.');
+      setMessageType('fail');
+    } finally {
       setIsLoadingNext(false);
     }
   };
+
+  useEffect(() => {
+    handlersRef.current = { nextWord: handleNextWord, startNextLevel: handleStartNextLevel };
+  });
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -347,17 +374,11 @@ export default function GameEngine({
 
   // El pool de 14 letras (solución + distractores, desordenado) lo genera el servidor.
 
-  // Track used indices from pool to gray them out
-  // We need to know WHICH instance of a letter is used.
-  // Actually, simpler: count occurrences.
-  const getUsedInPool = (char: string) => {
-    const totalInPool = letterPool.filter(l => l === char).length;
-    const totalInInput = userInput.filter(l => l === char).length;
-    // But wait, if they are hints, they are already there.
-    return totalInInput;
-  };
+  // Una ficha del pool se ve usada si en la palabra hay más apariciones de esa letra que
+  // fichas iguales anteriores a ella (las letras reveladas también consumen una ficha).
+  const getUsedInPool = (char: string) => userInput.filter(l => l === char).length;
 
-  const handlePoolClick = (char: string, poolIndex: number) => {
+  const handlePoolClick = (char: string) => {
     if (isGuessed || isLoadingNext) return;
     
     // Find first empty position in userInput that is NOT a revealed index
@@ -480,7 +501,7 @@ export default function GameEngine({
     
     setIsLoadingNext(true);
     try {
-      const result = await useHint(currentWordId, 'letter');
+      const result = await requestHint(currentWordId, 'letter');
       if (result.success && 'revealed' in result) {
         const { index, letter } = result.revealed;
         setRevealedIndices(prev => (prev.includes(index) ? prev : [...prev, index]));
@@ -588,7 +609,7 @@ export default function GameEngine({
         <div className="mb-4 md:mb-8 relative">
           <div className="absolute -left-4 md:-left-6 top-0 bottom-0 w-1 bg-[#ff00ff]/30 rounded-full" />
           <h2 className="text-base md:text-xl font-medium leading-relaxed text-[#00ffff]/90 italic">
-            "{currentDescription}"
+            &ldquo;{currentDescription}&rdquo;
           </h2>
         </div>
 
@@ -667,7 +688,7 @@ export default function GameEngine({
                   key={i} 
                   char={char} 
                   isUsed={getUsedInPool(char) > letterPool.slice(0, i+1).filter(l => l === char).length - 1} 
-                  onClick={() => handlePoolClick(char, i)} 
+                  onClick={() => handlePoolClick(char)} 
                 />
               ))}
             </div>
@@ -677,7 +698,7 @@ export default function GameEngine({
                   key={i+7} 
                   char={char} 
                   isUsed={getUsedInPool(char) > letterPool.slice(0, i+8).filter(l => l === char).length - 1} 
-                  onClick={() => handlePoolClick(char, i+7)} 
+                  onClick={() => handlePoolClick(char)} 
                 />
               ))}
             </div>
@@ -690,21 +711,21 @@ export default function GameEngine({
             <>
               <button 
                 onClick={(e) => { e.stopPropagation(); handleGiveHint(); }}
-                disabled={isLoadingNext || neuronas < 5}
+                disabled={isLoadingNext || neuronas < costs.letter}
                 className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-[#00ffff]/10 hover:bg-[#00ffff]/20 border border-[#00ffff]/40 rounded-xl transition-all group/btn disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Pedir letra"
               >
                 <Lightbulb className="w-4 h-4 md:w-5 md:h-5 group-hover/btn:text-yellow-400 transition-colors" />
-                <span className="font-mono text-xs md:text-sm font-bold">LETRA (-5 N)</span>
+                <span className="font-mono text-xs md:text-sm font-bold">LETRA (-{costs.letter} N)</span>
               </button>
               <button 
                 onClick={(e) => { e.stopPropagation(); handleSkip(); }}
-                disabled={isLoadingNext || neuronas < 15}
+                disabled={isLoadingNext || neuronas < costs.skip}
                 className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-3 bg-[#ff00ff]/10 hover:bg-[#ff00ff]/20 border border-[#ff00ff]/40 rounded-xl transition-all group/btn disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Saltar palabra"
               >
                 <SkipForward className="w-4 h-4 md:w-5 md:h-5 group-hover/btn:translate-x-1 transition-transform" />
-                <span className="font-mono text-xs md:text-sm font-bold">SALTAR (-15 N)</span>
+                <span className="font-mono text-xs md:text-sm font-bold">SALTAR (-{costs.skip} N)</span>
               </button>
             </>
           ) : (
@@ -727,13 +748,14 @@ export default function GameEngine({
 
       <div className="flex justify-center gap-4 text-[#00ffff]/40 font-mono text-[9px] md:text-[10px] tracking-widest uppercase">
         <div className="flex items-center gap-1">
-          <Keyboard className="w-3 h-3" /> {(/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) ? 'TOCÁ EL JUEGO PARA ESCRIBIR' : 'USÁ TU TECLADO PARA ESCRIBIR'}
+          <Keyboard className="w-3 h-3" /> {isMobile ? 'TOCÁ EL JUEGO PARA ESCRIBIR' : 'USÁ TU TECLADO PARA ESCRIBIR'}
         </div>
       </div>
       <AnimatePresence>
         {showParticles && <VictoryParticles />}
       </AnimatePresence>
-        {showLevelUpModal && levelStats && (
+        {gameOver && <GameOverPanel />}
+        {showLevelUpModal && levelStats && !gameOver && (
           <LevelUpModal 
             level={currentLevel}
             stats={levelStats}

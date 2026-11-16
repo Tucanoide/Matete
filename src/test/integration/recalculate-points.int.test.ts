@@ -28,7 +28,7 @@ async function seedInflated() {
 }
 
 describe('scripts/recalculate-points', () => {
-  it('dry-run informa la diferencia y no escribe nada', async () => {
+  it('[DATA-07] dry-run informa la diferencia y no escribe nada', async () => {
     const { inflated } = await seedInflated()
     const r = await recalculatePoints(db, { apply: false })
     expect(r).toMatchObject({ applied: false, usersAffected: 1, pointsDelta: -347 })
@@ -40,7 +40,7 @@ describe('scripts/recalculate-points', () => {
     expect(backup[0].exists).toBe(false)
   })
 
-  it('--apply respalda y deja points = aciertos y totalTime = suma de tiempos; neuronas intactas', async () => {
+  it('[DATA-07] --apply respalda y deja points = aciertos y totalTime = suma de tiempos; neuronas intactas', async () => {
     const { inflated, ok } = await seedInflated()
     const r = await recalculatePoints(db, { apply: true })
     expect(r.applied).toBe(true)
@@ -60,7 +60,7 @@ describe('scripts/recalculate-points', () => {
     expect((await recalculatePoints(db, { apply: false })).usersAffected).toBe(0)
   })
 
-  it('no se aplica dos veces si ya existe el respaldo', async () => {
+  it('[DATA-07] no se aplica dos veces si ya existe el respaldo', async () => {
     await seedInflated()
     await recalculatePoints(db, { apply: true })
     await expect(recalculatePoints(db, { apply: true })).rejects.toThrow(/ya existe/)

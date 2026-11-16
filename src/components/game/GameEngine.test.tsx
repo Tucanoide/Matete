@@ -3,8 +3,9 @@ import userEvent from '@testing-library/user-event'
 import '@testing-library/jest-dom'
 import GameEngine from './GameEngine'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
-import { getNextWord, submitGuess, useHint, moveToNextLevel, startWord } from '@/app/actions/game'
+import { getNextWord, submitGuess, requestHint, moveToNextLevel, startWord, updateUsername } from '@/app/actions/game'
 import { toPublicWord } from '@/lib/public-word'
+import { useSession } from 'next-auth/react'
 
 // El GameEngine ya no conoce la solución: recibe una PublicWord y el servidor (submitGuess)
 // decide si el intento es correcto. Acá submitGuess se simula con una tabla de soluciones.
@@ -23,10 +24,12 @@ vi.mock('@/app/actions/game', () => ({
   getNextWord: vi.fn(),
   startWord: vi.fn(() => Promise.resolve({ ok: true })),
   submitGuess: vi.fn(),
-  useHint: vi.fn(),
+  requestHint: vi.fn(),
   moveToNextLevel: vi.fn(),
   getInitialGameState: vi.fn(),
   getRandomMessage: vi.fn(() => Promise.resolve('¡Bien hecho!')),
+  checkUsername: vi.fn(() => Promise.resolve({ available: true })),
+  updateUsername: vi.fn(() => Promise.resolve({ success: true })),
 }))
 
 vi.mock('@/app/actions/comments', () => ({
@@ -81,23 +84,23 @@ describe('GameEngine Component', () => {
     user = userEvent.setup()
   })
 
-  it('should register the word delivery on mount (startWord)', async () => {
+  it('[GAME-12] should register the word delivery on mount (startWord)', async () => {
     render(<GameEngine initialWord={initialWord} initialLevel={initialLevel} />)
     await waitFor(() => expect(startWord).toHaveBeenCalledWith(1))
   })
 
-  it('never receives the solution: PublicWord has no word field', () => {
+  it('[GAME-01] never receives the solution: PublicWord has no word field', () => {
     expect(JSON.stringify(initialWord)).not.toContain('PLATANO')
   })
 
-  it('should render the initial description and level', () => {
+  it('[UI-01] should render the initial description and level', () => {
     render(<GameEngine initialWord={initialWord} initialLevel={initialLevel} initialNeedsUsername={false} />)
 
     expect(screen.getByText(new RegExp(initialDescription, 'i'))).toBeInTheDocument()
     expect(screen.getByText(/Nivel 1/i)).toBeInTheDocument()
   })
 
-  it('should update character boxes when user types', async () => {
+  it('[UI-02] should update character boxes when user types', async () => {
     render(<GameEngine initialWord={initialWord} initialLevel={initialLevel} initialNeedsUsername={false} />)
 
     screen.getByTestId('game-container').focus()
@@ -110,7 +113,7 @@ describe('GameEngine Component', () => {
     })
   })
 
-  it('should show success state and next button when word is correctly guessed', async () => {
+  it('[UI-03] should show success state and next button when word is correctly guessed', async () => {
     render(<GameEngine initialWord={initialWord} initialLevel={initialLevel} initialNeedsUsername={false} />)
 
     screen.getByTestId('game-container').focus()
@@ -124,7 +127,7 @@ describe('GameEngine Component', () => {
     expect(submitGuess).toHaveBeenCalledWith(1, 'PLATANO')
   })
 
-  it('should show the fail message when the server rejects the guess', async () => {
+  it('[UI-17] should show the fail message when the server rejects the guess', async () => {
     render(<GameEngine initialWord={initialWord} initialLevel={initialLevel} />)
 
     screen.getByTestId('game-container').focus()
@@ -137,7 +140,7 @@ describe('GameEngine Component', () => {
     expect(screen.queryByRole('button', { name: /SIGUIENTE/i })).not.toBeInTheDocument()
   })
 
-  it('should fetch new word when next button is clicked', async () => {
+  it('[UI-04] should fetch new word when next button is clicked', async () => {
     vi.mocked(getNextWord).mockResolvedValueOnce(word(576, 'MORALEJA', 'Nueva definición'))
 
     render(<GameEngine initialWord={initialWord} initialLevel={initialLevel} initialNeedsUsername={false} />)
@@ -159,7 +162,7 @@ describe('GameEngine Component', () => {
     expect(screen.getByTestId('word-box-7')).toBeInTheDocument() // MORALEJA: 8 casilleros
   })
 
-  it('should handle backspace correctly', async () => {
+  it('[UI-05] should handle backspace correctly', async () => {
     render(<GameEngine initialWord={initialWord} initialLevel={initialLevel} initialNeedsUsername={false} />)
 
     fireEvent.keyDown(window, { key: 'P' })
@@ -169,7 +172,7 @@ describe('GameEngine Component', () => {
     await waitFor(() => expect(screen.getByTestId('word-box-0')).toHaveTextContent(''))
   })
 
-  it('should show LevelUpModal when current level is completed', async () => {
+  it('[PROG-05] should show LevelUpModal when current level is completed', async () => {
     const levelStats = { solved: 5, total: 5, levelId: 1 }
     vi.mocked(submitGuess).mockResolvedValueOnce(correct('PLATANO', { isLevelComplete: true, levelStats }))
 
@@ -187,7 +190,7 @@ describe('GameEngine Component', () => {
     expect(screen.getByRole('button', { name: /ACCEDER AL NIVEL 2/i })).toBeInTheDocument()
   })
 
-  it('should call moveToNextLevel and update state when level up modal button is clicked', async () => {
+  it('[PROG-06] should call moveToNextLevel and update state when level up modal button is clicked', async () => {
     vi.mocked(submitGuess).mockResolvedValueOnce(
       correct('PLATANO', { isLevelComplete: true, levelStats: { solved: 5, total: 5, levelId: 1 } })
     )
@@ -221,7 +224,7 @@ describe('GameEngine Component', () => {
     }, { timeout: 15000 })
   }, 30000)
 
-  it('should reset cursor to 0 and allow typing from start after clearing word', async () => {
+  it('[UI-07] should reset cursor to 0 and allow typing from start after clearing word', async () => {
     render(<GameEngine initialWord={initialWord} initialLevel={initialLevel} initialNeedsUsername={false} />)
 
     screen.getByTestId('game-container').focus()
@@ -243,8 +246,8 @@ describe('GameEngine Component', () => {
     }, { timeout: 10000 })
   })
 
-  it('should deduct neuronas and show the revealed letter when buying a letter hint', async () => {
-    vi.mocked(useHint).mockResolvedValueOnce({
+  it('[UI-09] should deduct neuronas and show the revealed letter when buying a letter hint', async () => {
+    vi.mocked(requestHint).mockResolvedValueOnce({
       success: true,
       remainingNeuronas: 45,
       revealed: { index: 0, letter: 'P' },
@@ -262,10 +265,10 @@ describe('GameEngine Component', () => {
     }, { timeout: 5000 })
     expect(screen.getByTestId('word-box-0')).toHaveTextContent('P')
 
-    expect(useHint).toHaveBeenCalledWith(1, 'letter')
+    expect(requestHint).toHaveBeenCalledWith(1, 'letter')
   })
 
-  it('should render letters already revealed by previous hints', () => {
+  it('[UI-15] should render letters already revealed by previous hints', () => {
     const withHints = toPublicWord({ id: 1, word: 'PLATANO', description: 'x' }, [0, 3])
     render(<GameEngine initialWord={withHints} initialLevel={1} />)
     expect(screen.getByTestId('word-box-0')).toHaveTextContent('P')
@@ -273,8 +276,8 @@ describe('GameEngine Component', () => {
     expect(screen.getByTestId('word-box-1')).toHaveTextContent('')
   })
 
-  it('should deduct neuronas when skipping a word', async () => {
-    vi.mocked(useHint).mockResolvedValueOnce({
+  it('[UI-10] should deduct neuronas when skipping a word', async () => {
+    vi.mocked(requestHint).mockResolvedValueOnce({
       success: true,
       remainingNeuronas: 35,
       isLevelComplete: false,
@@ -292,11 +295,11 @@ describe('GameEngine Component', () => {
       expect(screen.getByTestId('neuronas-count')).toHaveTextContent('35N')
     }, { timeout: 5000 })
 
-    expect(useHint).toHaveBeenCalledWith(1, 'skip')
+    expect(requestHint).toHaveBeenCalledWith(1, 'skip')
     expect(await screen.findByText(/Nueva palabra/i)).toBeInTheDocument()
   })
 
-  it('should trigger next word when Enter is pressed after a correct guess', async () => {
+  it('[UI-11] should trigger next word when Enter is pressed after a correct guess', async () => {
     vi.mocked(getNextWord).mockResolvedValueOnce(word(576, 'MORALEJA', 'Nueva definición'))
 
     render(<GameEngine initialWord={initialWord} initialLevel={initialLevel} initialNeedsUsername={false} />)
@@ -317,7 +320,7 @@ describe('GameEngine Component', () => {
     expect(await screen.findByText(/Nueva definición/i)).toBeInTheDocument()
   })
 
-  it('should handle backspace at the end of a full word correctly', async () => {
+  it('[UI-06] should handle backspace at the end of a full word correctly', async () => {
     render(<GameEngine initialWord={word(1, 'PLATANO', 'Test')} initialLevel={1} initialNeedsUsername={false} />)
 
     screen.getByTestId('game-container').focus()
@@ -334,7 +337,7 @@ describe('GameEngine Component', () => {
     })
   })
 
-  it('should toggle between Pool Mode and Keyboard Mode', async () => {
+  it('[UI-12] should toggle between Pool Mode and Keyboard Mode', async () => {
     render(<GameEngine initialWord={word(1, 'TEST', 'Test')} initialLevel={1} />)
 
     const toggleBtn = screen.getByTitle('Cambiar modo de entrada')
@@ -346,7 +349,7 @@ describe('GameEngine Component', () => {
     expect(screen.queryByRole('textbox', { hidden: true })).not.toBeInTheDocument()
   })
 
-  it('should render the 14-letter pool sent by the server', () => {
+  it('[UI-18] should render the 14-letter pool sent by the server', () => {
     const w = word(1, 'TEST', 'Test')
     render(<GameEngine initialWord={w} initialLevel={1} />)
     for (const ch of Array.from(new Set(w.pool))) {
@@ -354,7 +357,7 @@ describe('GameEngine Component', () => {
     }
   })
 
-  it('should disable and enable sound via the toggle button', async () => {
+  it('[UI-13] should disable and enable sound via the toggle button', async () => {
     render(<GameEngine initialWord={word(1, 'TEST', 'Test')} initialLevel={1} />)
 
     const buttons = screen.getAllByRole('button')
@@ -369,7 +372,7 @@ describe('GameEngine Component', () => {
     }
   })
 
-  it('should clear all letters when the Clear All button is clicked', async () => {
+  it('[UI-08] should clear all letters when the Clear All button is clicked', async () => {
     render(<GameEngine initialWord={word(1, 'TEST', 'Test')} initialLevel={1} />)
 
     screen.getByTestId('game-container').focus()
@@ -428,5 +431,141 @@ describe('GameEngine Component', () => {
       fireEvent.keyDown(window, { key: 'Enter' })
       await waitFor(() => expect(getNextWord).toHaveBeenCalled())
     })
+  })
+
+  describe('[INI-01] ingreso sin login con nombre de fantasía (UI)', () => {
+    it('un invitado sin alias ve el pedido de nombre, lo elige y sigue jugando', async () => {
+      render(<GameEngine initialWord={initialWord} initialLevel={1} initialNeedsUsername />)
+      expect(screen.getByText('¡IDENTIFICATE!')).toBeInTheDocument()
+      // No hay forma de cerrarlo sin elegir nombre.
+      expect(screen.queryByRole('button', { name: /cerrar|omitir|después/i })).not.toBeInTheDocument()
+
+      await user.type(screen.getByPlaceholderText(/Matetero_Alpha/i), 'Zorro Azul!')
+      expect(screen.getByPlaceholderText(/Matetero_Alpha/i)).toHaveValue('ZorroAzul') // filtra a [a-zA-Z0-9_]
+      const submit = screen.getByRole('button', { name: /ESTABLECER ALIAS/i })
+      await waitFor(() => expect(submit).not.toBeDisabled())
+      await user.click(submit)
+
+      await waitFor(() => expect(screen.queryByText('¡IDENTIFICATE!')).not.toBeInTheDocument())
+      expect(updateUsername).toHaveBeenCalledWith('ZorroAzul')
+      expect(screen.getByText(new RegExp(initialDescription, 'i'))).toBeInTheDocument()
+    })
+
+    it('en la primera visita no se pide alias', () => {
+      render(<GameEngine initialWord={initialWord} initialLevel={1} initialNeedsUsername={false} />)
+      expect(screen.queryByText('¡IDENTIFICATE!')).not.toBeInTheDocument()
+    })
+  })
+
+  it('[UI-15] las letras reveladas no se editan: el cursor las saltea, backspace y limpiar las respetan', async () => {
+    const withHints = toPublicWord({ id: 1, word: 'PLATANO', description: 'x' }, [1, 3])
+    render(<GameEngine initialWord={withHints} initialLevel={1} />)
+    const box = (i: number) => screen.getByTestId(`word-box-${i}`)
+
+    // Escribir saltea las posiciones reveladas (1 y 3).
+    await user.keyboard('PX')
+    await waitFor(() => {
+      expect(box(0)).toHaveTextContent('P')
+      expect(box(1)).toHaveTextContent('L')
+      expect(box(2)).toHaveTextContent('X')
+      expect(box(3)).toHaveTextContent('T')
+    })
+
+    // Backspace con el cursor después de una revelada borra la anterior editable, no la revelada.
+    await user.keyboard('{Backspace}')
+    await waitFor(() => expect(box(2).textContent).toBe(''))
+    expect(box(3)).toHaveTextContent('T')
+    expect(box(1)).toHaveTextContent('L')
+
+    // Click en una revelada no la borra.
+    await user.click(box(1))
+    expect(box(1)).toHaveTextContent('L')
+
+    // Limpiar borra todo menos las reveladas.
+    await user.click(screen.getByTitle('Limpiar palabra'))
+    expect(box(0).textContent).toBe('')
+    expect(box(1)).toHaveTextContent('L')
+    expect(box(3)).toHaveTextContent('T')
+  })
+
+  it('[UI-19] Backspace repetido con el teclado físico borra letra por letra', async () => {
+    render(<GameEngine initialWord={initialWord} initialLevel={1} />)
+    const box = (i: number) => screen.getByTestId(`word-box-${i}`)
+    await user.keyboard('PLA')
+    await waitFor(() => expect(box(2)).toHaveTextContent('A'))
+    await user.keyboard('{Backspace}{Backspace}')
+    await waitFor(() => expect(box(1).textContent).toBe(''))
+    expect(box(2).textContent).toBe('')
+    expect(box(0)).toHaveTextContent('P')
+    await user.keyboard('X')
+    await waitFor(() => expect(box(1)).toHaveTextContent('X'))
+  })
+
+  it('[HINT-10] un error al saltar no deja el juego trabado', async () => {
+    vi.mocked(requestHint).mockRejectedValueOnce(new Error('UnrecognizedActionError: action not found on the server'))
+    render(<GameEngine initialWord={initialWord} initialLevel={1} initialNeuronas={50} />)
+    await user.click(screen.getByTitle('Saltar palabra'))
+    expect(await screen.findByText(/Sincronización requerida/i)).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByTitle('Saltar palabra')).not.toBeDisabled())
+    expect(screen.getByTitle('Pedir letra')).not.toBeDisabled()
+  })
+
+  it('[HINT-10] un error genérico al saltar muestra un aviso y rehabilita los botones', async () => {
+    vi.mocked(requestHint).mockRejectedValueOnce(new Error('network'))
+    render(<GameEngine initialWord={initialWord} initialLevel={1} initialNeuronas={50} />)
+    await user.click(screen.getByTitle('Saltar palabra'))
+    await waitFor(() => expect(screen.getByTitle('Saltar palabra')).not.toBeDisabled())
+    expect(screen.getByText(/No pudimos saltar la palabra/i)).toBeInTheDocument()
+  })
+
+  it('[HINT-09] los botones muestran y usan los costos que informa el servidor', async () => {
+    render(<GameEngine initialWord={initialWord} initialLevel={1} initialNeuronas={10} initialCosts={{ letter: 8, skip: 20 }} />)
+    expect(screen.getByText('LETRA (-8 N)')).toBeInTheDocument()
+    expect(screen.getByText('SALTAR (-20 N)')).toBeInTheDocument()
+    expect(screen.getByTitle('Pedir letra')).not.toBeDisabled()
+    expect(screen.getByTitle('Saltar palabra')).toBeDisabled()
+  })
+
+  it('[HINT-09] con menos neuronas que el costo de la letra, el botón se deshabilita', () => {
+    render(<GameEngine initialWord={initialWord} initialLevel={1} initialNeuronas={7} initialCosts={{ letter: 8, skip: 20 }} />)
+    expect(screen.getByTitle('Pedir letra')).toBeDisabled()
+  })
+
+  it('[PROG-09] completar el último nivel muestra el fin del juego', async () => {
+    vi.mocked(submitGuess).mockResolvedValueOnce(
+      correct('PLATANO', { isLevelComplete: true, levelStats: { solved: 5, total: 5, levelId: 1 } })
+    )
+    vi.mocked(moveToNextLevel).mockResolvedValueOnce({ success: false, error: 'No hay más niveles.', gameOver: true })
+    render(<GameEngine initialWord={initialWord} initialLevel={1} />)
+    await user.keyboard('PLATANO')
+    const btn = await screen.findByRole('button', { name: /ACCEDER AL NIVEL 2/i }, { timeout: 5000 })
+    await user.click(btn)
+    expect(await screen.findByText(/COMPLETASTE MATETE/i)).toBeInTheDocument()
+    expect(screen.queryByText(/NIVEL 1 COMPLETADO/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('[UI-16] render en servidor', () => {
+  it('GameEngine se renderiza sin navigator global', async () => {
+    const { renderToString } = await import('react-dom/server')
+    vi.stubGlobal('navigator', undefined)
+    try {
+      const html = renderToString(<GameEngine initialWord={toPublicWord({ id: 1, word: 'PLATANO', description: 'x' })} initialLevel={1} />)
+      expect(html).toContain('TECLADO')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
+describe('[UI-21] neuronas de la sesión', () => {
+  it('si la sesión ya está cargada al montar, sus neuronas se muestran', () => {
+    vi.mocked(useSession).mockReturnValue({ data: { user: { neuronas: 77 } }, status: 'authenticated', update: vi.fn() } as never)
+    try {
+      render(<GameEngine initialWord={toPublicWord({ id: 1, word: 'PLATANO', description: 'x' })} initialLevel={1} initialNeuronas={50} />)
+      expect(screen.getByTestId('neuronas-count')).toHaveTextContent('77N')
+    } finally {
+      vi.mocked(useSession).mockReturnValue({ data: null, status: 'unauthenticated', update: vi.fn(() => Promise.resolve()) } as never)
+    }
   })
 })

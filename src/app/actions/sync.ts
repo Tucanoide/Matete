@@ -13,6 +13,7 @@ const INITIAL_NEURONAS = 50
  * - Atómica: todo en una transacción; si algo falla no queda nada sumado a medias.
  * - Idempotente: el invitado se bloquea con FOR UPDATE y se borra al final; una segunda
  *   llamada (recarga, otra pestaña) no lo encuentra y no hace nada.
+ * - El alias del invitado se conserva si la cuenta no tenía uno (SYNC-09).
  * - Puntos y tiempo se RECALCULAN desde Progress, así que una palabra resuelta por ambos
  *   cuenta una sola vez.
  */
@@ -35,8 +36,8 @@ export async function migrateGuestProgress(): Promise<
 
   const migrated = await prisma.$transaction(async (tx) => {
     // 1. Bloquear al invitado (solo usuarios sin email: nunca una cuenta registrada).
-    const locked = await tx.$queryRaw<{ id: string; neuronas: number; levelId: number }[]>`
-      SELECT id, neuronas, "levelId" FROM "User"
+    const locked = await tx.$queryRaw<{ id: string; neuronas: number; levelId: number; username: string | null }[]>`
+      SELECT id, neuronas, "levelId", username FROM "User"
       WHERE id = ${guestCookie.userId} AND email IS NULL
       FOR UPDATE`
     if (locked.length === 0) return false
@@ -98,6 +99,9 @@ export async function migrateGuestProgress(): Promise<
         totalTime: agg._sum.timeTaken ?? 0,
         neuronas: { increment: Math.max(0, guest.neuronas - INITIAL_NEURONAS) },
         levelId: Math.max(current.levelId, guest.levelId),
+        // SYNC-09: el nombre de fantasía del invitado pasa a la cuenta si esta no tenía uno.
+        // El invitado ya se borró, así que el alias quedó libre para la restricción unique.
+        ...(current.username ? {} : guest.username ? { username: guest.username } : {}),
       },
     })
     return true

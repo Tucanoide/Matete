@@ -1,10 +1,11 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import '@testing-library/jest-dom'
-import { vi, describe, it, expect, beforeEach } from 'vitest'
+import { vi, describe, it, expect } from 'vitest'
 import UsernameModal from './UsernameModal'
 import LevelUpModal from './LevelUpModal'
 import InstructionsModal from './InstructionsModal'
+import { checkUsername, updateUsername } from '@/app/actions/game'
 
 // Mock Server Actions
 vi.mock('@/app/actions/game', () => ({
@@ -22,7 +23,7 @@ describe('Game Modals', () => {
   const user = userEvent.setup()
 
   describe('UsernameModal', () => {
-    it('should render and handle submission', async () => {
+    it('[USER-06] should render and handle submission', async () => {
       const onSuccess = vi.fn()
       render(<UsernameModal onSuccess={onSuccess} />)
       
@@ -31,9 +32,6 @@ describe('Game Modals', () => {
       
       // We need to wait for the debounced checkUsername to complete and set status to 'available'
       await waitFor(() => {
-        const checkIcon = screen.queryByTestId('CheckCircle2') // Wait, does it have an id? No.
-        // It has a CheckCircle2 component from lucide.
-        // The button becomes enabled when status is 'available'.
         expect(screen.getByRole('button', { name: /ESTABLECER ALIAS/i })).not.toBeDisabled()
       })
 
@@ -47,7 +45,7 @@ describe('Game Modals', () => {
   })
 
   describe('LevelUpModal', () => {
-    it('should render stats and handle next level click', async () => {
+    it('[PROG-05] should render stats and handle next level click', async () => {
       const onNextLevel = vi.fn()
       const stats = { solved: 5, total: 5, levelId: 1 }
       render(<LevelUpModal level={1} stats={stats} onNextLevel={onNextLevel} />)
@@ -63,7 +61,7 @@ describe('Game Modals', () => {
   })
 
   describe('InstructionsModal', () => {
-    it('should render and handle close', async () => {
+    it('[UI-14] should render and handle close', async () => {
       const onClose = vi.fn()
       render(<InstructionsModal isOpen={true} onClose={onClose} />)
       
@@ -74,5 +72,58 @@ describe('Game Modals', () => {
       
       expect(onClose).toHaveBeenCalled()
     })
+  })
+})
+
+describe('[USER-07] UsernameModal ante límites y errores del servidor', () => {
+  const user = userEvent.setup()
+
+  it('muestra el aviso de demasiadas consultas y no habilita el envío', async () => {
+    vi.mocked(checkUsername).mockResolvedValueOnce({ available: false, error: 'rate_limited' })
+    render(<UsernameModal onSuccess={vi.fn()} />)
+    await user.type(screen.getByPlaceholderText(/Matetero_Alpha/i), 'ZorroAzul')
+    expect(await screen.findByText(/Demasiadas consultas/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /ESTABLECER ALIAS/i })).toBeDisabled()
+  })
+
+  it('[USER-03] muestra el error específico del servidor al guardar', async () => {
+    vi.mocked(checkUsername).mockResolvedValue({ available: true })
+    vi.mocked(updateUsername).mockResolvedValueOnce({ success: false, error: 'Ese nombre ya está en uso.' })
+    const onSuccess = vi.fn()
+    render(<UsernameModal onSuccess={onSuccess} />)
+    await user.type(screen.getByPlaceholderText(/Matetero_Alpha/i), 'ZorroAzul')
+    const btn = screen.getByRole('button', { name: /ESTABLECER ALIAS/i })
+    await waitFor(() => expect(btn).not.toBeDisabled())
+    await user.click(btn)
+    expect(await screen.findByText('Ese nombre ya está en uso.')).toBeInTheDocument()
+    expect(onSuccess).not.toHaveBeenCalled()
+  })
+
+  it('[INI-01] el texto explica el nombre de fantasía sin prometer el ranking a invitados', () => {
+    render(<UsernameModal onSuccess={vi.fn()} />)
+    expect(screen.getByText(/nombre de fantasía/i)).toBeInTheDocument()
+    expect(screen.queryByText(/para el ranking/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('[SYNC-10] UsernameModal cuando el alias ya quedó fijado', () => {
+  const user = userEvent.setup()
+  it('si el servidor dice que ya tiene alias (p. ej. migrado desde el invitado), el modal se cierra', async () => {
+    vi.mocked(checkUsername).mockResolvedValue({ available: true })
+    vi.mocked(updateUsername).mockResolvedValueOnce({ success: false, error: 'Ya elegiste tu nombre y no se puede cambiar.', alreadySet: true })
+    const onSuccess = vi.fn()
+    render(<UsernameModal onSuccess={onSuccess} />)
+    await user.type(screen.getByPlaceholderText(/Matetero_Alpha/i), 'OtroNombre')
+    const btn = screen.getByRole('button', { name: /ESTABLECER ALIAS/i })
+    await waitFor(() => expect(btn).not.toBeDisabled())
+    await user.click(btn)
+    await waitFor(() => expect(onSuccess).toHaveBeenCalled())
+  })
+})
+
+describe('[UI-22] InstructionsModal respeta isOpen', () => {
+  it('cerrado no renderiza nada', () => {
+    const { container } = render(<InstructionsModal isOpen={false} onClose={vi.fn()} />)
+    expect(container).toBeEmptyDOMElement()
   })
 })

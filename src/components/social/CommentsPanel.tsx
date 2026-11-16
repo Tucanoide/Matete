@@ -33,28 +33,42 @@ export default function CommentsPanel({ wordId, onNeedUsername }: CommentsPanelP
   const [posting, setPosting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const load = useCallback(async (cursor?: string) => {
-    try {
-      const r = await getWordComments(wordId, cursor);
-      if (r.locked) {
-        setState('locked');
-        return;
-      }
-      setComments((prev) => (cursor ? [...prev, ...r.comments] : r.comments));
-      setNextCursor(r.nextCursor);
-      setCanPost(r.canPost);
-      setBlockedReason(r.postBlockedReason);
-      setState('ready');
-    } catch {
-      setState('error');
+  const apply = useCallback((r: Awaited<ReturnType<typeof getWordComments>>, append: boolean) => {
+    if (r.locked) {
+      setState('locked');
+      return;
     }
-  }, [wordId]);
+    setComments((prev) => (append ? [...prev, ...r.comments] : r.comments));
+    setNextCursor(r.nextCursor);
+    setCanPost(r.canPost);
+    setBlockedReason(r.postBlockedReason);
+    setState('ready');
+  }, []);
 
-  useEffect(() => {
+  /** Página siguiente (botón "ver más"). */
+  const load = (cursor?: string) => {
+    getWordComments(wordId, cursor).then((r) => apply(r, Boolean(cursor)), () => setState('error'));
+  };
+
+  // Al cambiar de palabra se vuelve a "cargando" durante el render (no en el efecto).
+  const [shownWordId, setShownWordId] = useState(wordId);
+  if (shownWordId !== wordId) {
+    setShownWordId(wordId);
     setState('loading');
     setComments([]);
-    load();
-  }, [load]);
+  }
+
+  // Primera página; se descarta la respuesta si la palabra cambió mientras tanto.
+  useEffect(() => {
+    let active = true;
+    getWordComments(wordId).then(
+      (r) => active && apply(r, false),
+      () => active && setState('error')
+    );
+    return () => {
+      active = false;
+    };
+  }, [wordId, apply]);
 
   const handlePost = async (e: React.FormEvent) => {
     e.preventDefault();

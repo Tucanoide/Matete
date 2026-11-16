@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import prisma from '@/lib/prisma'
-import { startWord, submitGuess, useHint } from '@/app/actions/game'
+import { startWord, submitGuess, requestHint } from '@/app/actions/game'
 import { GUEST_COOKIE, verifyGuestToken } from '@/lib/guest-cookie'
 import { jar, WORDS } from './harness'
 
@@ -12,7 +12,7 @@ describe('[SOC-02] submitGuess devuelve el resultado registrado por el servidor'
   it('incluye tiempo de servidor y letras reveladas por pista', async () => {
     await startWord(W1.id)
     const userId = verifyGuestToken(jar.get(GUEST_COOKIE)!.value)!
-    const hint = await useHint(W1.id, 'letter')
+    const hint = await requestHint(W1.id, 'letter')
     expect(hint.success).toBe(true)
 
     // Simula 12 s desde la entrega, sin depender del reloj del cliente.

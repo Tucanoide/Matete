@@ -1,34 +1,33 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { migrateGuestProgress } from '@/app/actions/sync';
 
+/**
+ * Al entrar con Google, funde el invitado de este navegador en la cuenta. La home ya se
+ * renderizó antes de migrar (con el alias, neuronas y nivel viejos), así que después de
+ * migrar se pide de nuevo el estado al servidor (SYNC-10).
+ */
 export function AuthSync() {
-  const { data: session, status } = useSession();
+  const { status, update } = useSession();
+  const router = useRouter();
   const hasSynced = useRef(false);
 
   useEffect(() => {
-    // Only attempt sync if we are authenticated and haven't synced in this component lifecycle
-    if (status === 'authenticated' && !hasSynced.current) {
-      hasSynced.current = true;
-      
-      const performSync = async () => {
-        try {
-          const result = await migrateGuestProgress();
-          if (result.success && result.migrated) {
-            console.log('Progress migrated from guest to authenticated account');
-            // We could force a session update here if needed, 
-            // but migrateGuestProgress already updated the DB.
-          }
-        } catch (error) {
-          console.error('Failed to migrate guest progress:', error);
+    if (status !== 'authenticated' || hasSynced.current) return;
+    hasSynced.current = true;
+
+    migrateGuestProgress()
+      .then(async (result) => {
+        if (result.success && result.migrated) {
+          await update();
+          router.refresh();
         }
-      };
+      })
+      .catch((error) => console.error('Failed to migrate guest progress:', error));
+  }, [status, update, router]);
 
-      performSync();
-    }
-  }, [status]);
-
-  return null; // This component doesn't render anything
+  return null;
 }

@@ -34,3 +34,13 @@ next-env.d.ts
 
 # test env (contiene secretos locales)
 .env.test
+
+# Secretos y bases locales (INFRA-05). Los keystores ya publicados se consideran comprometidos.
+*.keystore
+*.jks
+*.db
+*.sqlite
+Thumbs.db
+
+# Documentación interna con datos de infraestructura (INFRA-06)
+CODE_REVIEW.md

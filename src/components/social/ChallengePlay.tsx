@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { signIn } from 'next-auth/react';
 import { Swords, Timer, Trophy, Flag, Trash2, User as UserIcon, Check, X } from 'lucide-react';
 import { startChallenge, submitChallengeGuess, giveUpChallenge, type ChallengeView, type ChallengeResult } from '@/app/actions/challenges';
@@ -61,7 +62,9 @@ export default function ChallengePlay({ view }: { view: ChallengeView }) {
   const input = slots.map((s) => s.letter);
   const usedPool = slots.flatMap((s) => (s.pool === null ? [] : [s.pool]));
   const poolRef = useRef<string[]>([]);
-  poolRef.current = pool;
+  useEffect(() => {
+    poolRef.current = pool;
+  }, [pool]);
   const [elapsed, setElapsed] = useState(0);
   const [wrong, setWrong] = useState(false);
   const [outcome, setOutcome] = useState<Outcome | null>(
@@ -131,7 +134,9 @@ export default function ChallengePlay({ view }: { view: ChallengeView }) {
 
   // Teclado físico: si la letra está libre en el pool se usa esa ficha; si no, se escribe igual.
   const slotsRef = useRef<Slot[]>(slots);
-  slotsRef.current = slots;
+  useEffect(() => {
+    slotsRef.current = slots;
+  }, [slots]);
   useEffect(() => {
     if (phase !== 'playing') return;
     const onKey = (e: KeyboardEvent) => {
@@ -318,7 +323,7 @@ export default function ChallengePlay({ view }: { view: ChallengeView }) {
               Tu tiempo: <b>{formatDuration(outcome.timeTaken)}</b> · @{view.creator.username}: <b>{formatDuration(view.creatorTime)}</b>
             </p>
           )}
-          <a href="/" className="inline-block mt-2 px-6 py-3 rounded-xl bg-[#00ffff] text-[#050510] font-black">SEGUIR JUGANDO MATETE</a>
+          <Link href="/" className="inline-block mt-2 px-6 py-3 rounded-xl bg-[#00ffff] text-[#050510] font-black">SEGUIR JUGANDO MATETE</Link>
         </div>
       )}
       {phase === 'done' && !outcome && (

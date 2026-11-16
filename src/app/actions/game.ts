@@ -4,6 +4,7 @@ import prisma from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 import { ensureCurrentUser, getCurrentUser } from '@/lib/identity'
 import { isCorrectGuess, isValidGuessFormat, toPublicWord, type PublicWord, type RevealedLetter } from '@/lib/public-word'
+import { isValidUsername, USERNAME_CHECKS_PER_MINUTE } from '@/lib/username'
 
 // Server Actions del juego. Contrato: specs/001-hardening/contracts/server-actions.md
 // Reglas (constitución): el servidor decide todo lo que tiene valor; nunca se devuelve
@@ -12,7 +13,8 @@ import { isCorrectGuess, isValidGuessFormat, toPublicWord, type PublicWord, type
 type Db = typeof prisma | Prisma.TransactionClient
 type User = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>
 
-const SKIP_COST = 15
+const DEFAULT_LETTER_COST = 5
+const DEFAULT_SKIP_COST = 15
 const REWARD_NEURONAS = 10
 const MAX_LETTER_HINTS = 2
 
@@ -24,10 +26,20 @@ class ActionError extends Error {}
 // Helpers internos (no exportados: no son Server Actions)
 // ---------------------------------------------------------------------------
 
-async function getLetterCost(): Promise<number> {
-  const setting = await prisma.setting.findUnique({ where: { id: 'costo_pista' } })
-  const parsed = parseInt(setting?.value ?? '', 10)
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 5
+export type GameCosts = { letter: number; skip: number }
+
+/**
+ * Costos de pista y salto: única fuente (constitución, principio 4). Viven en `Setting`
+ * (`costo_pista`, `costo_salto`); el cliente los recibe en getInitialGameState y el
+ * servidor cobra exactamente estos valores (HINT-09).
+ */
+async function getCosts(): Promise<GameCosts> {
+  const rows = await prisma.setting.findMany({ where: { id: { in: ['costo_pista', 'costo_salto'] } } })
+  const read = (id: string, fallback: number) => {
+    const parsed = parseInt(rows.find((r) => r.id === id)?.value ?? '', 10)
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
+  }
+  return { letter: read('costo_pista', DEFAULT_LETTER_COST), skip: read('costo_salto', DEFAULT_SKIP_COST) }
 }
 
 async function getLevelStats(db: Db, userId: string, levelId: number): Promise<LevelStats> {
@@ -83,15 +95,16 @@ export async function getInitialGameState(): Promise<{
   levelId: number
   neuronas: number
   needsUsername: boolean
+  costs: GameCosts
 } | null> {
-  const user = await getCurrentUser()
+  const [user, costs] = await Promise.all([getCurrentUser(), getCosts()])
 
   if (!user) {
     const firstLevel = await prisma.level.findFirst({ orderBy: { id: 'asc' } })
     if (!firstLevel) return null
     const firstWord = await prisma.word.findFirst({ where: { levelId: firstLevel.id }, orderBy: { id: 'asc' } })
     if (!firstWord) return null
-    return { word: toPublicWord(firstWord), levelId: firstLevel.id, neuronas: 50, needsUsername: false }
+    return { word: toPublicWord(firstWord), levelId: firstLevel.id, neuronas: 50, needsUsername: false, costs }
   }
 
   const done = new Set(await doneWordIds(prisma, user.id))
@@ -116,7 +129,22 @@ export async function getInitialGameState(): Promise<{
     levelId,
     neuronas: user.neuronas,
     needsUsername: !user.username,
+    costs,
   }
+}
+
+/**
+ * Fin del juego (PROG-09): el jugador resolvió o salteó todas las palabras de todos los
+ * niveles. La home lo usa cuando getInitialGameState no tiene palabra para entregar.
+ */
+export async function getGameCompletion(): Promise<{ completed: boolean; points: number }> {
+  const user = await getCurrentUser()
+  if (!user) return { completed: false, points: 0 }
+  const [total, done] = await Promise.all([
+    prisma.word.count(),
+    prisma.progress.count({ where: { userId: user.id, OR: [{ guessed: true }, { skipped: true }] } }),
+  ])
+  return { completed: total > 0 && done >= total, points: user.points }
 }
 
 /** Lo llama el GameEngine al montar: crea el invitado/cookie si hace falta y registra la entrega. */
@@ -144,7 +172,7 @@ export async function getNextWord(_levelId?: number): Promise<PublicWord | null>
 
 export async function moveToNextLevel(): Promise<
   | { success: true; nextLevelId: number; nextWord: PublicWord | null; neuronas: number }
-  | { success: false; error: string }
+  | { success: false; error: string; gameOver?: true }
 > {
   const user = await ensureCurrentUser()
 
@@ -152,7 +180,7 @@ export async function moveToNextLevel(): Promise<
   if (stats.solved < stats.total) return { success: false, error: 'El nivel actual no está completo.' }
 
   const nextLevel = await prisma.level.findFirst({ where: { id: { gt: user.levelId } }, orderBy: { id: 'asc' } })
-  if (!nextLevel) return { success: false, error: 'No hay más niveles.' }
+  if (!nextLevel) return { success: false, error: 'No hay más niveles.', gameOver: true }
 
   const updated = await prisma.user.update({ where: { id: user.id }, data: { levelId: nextLevel.id } })
 
@@ -254,7 +282,7 @@ export async function submitGuess(wordId: number, guess: string): Promise<Submit
 // Pistas y saltos (S-5, FR-012, FR-013)
 // ---------------------------------------------------------------------------
 
-export type UseHintResult =
+export type RequestHintResult =
   | { success: true; remainingNeuronas: number; revealed: RevealedLetter }
   | { success: true; remainingNeuronas: number; isLevelComplete: boolean; levelStats?: LevelStats }
   | { success: false; error: string }
@@ -272,14 +300,15 @@ async function charge(tx: Prisma.TransactionClient, userId: string, cost: number
   return u.neuronas
 }
 
-export async function useHint(wordId: number, type: 'letter' | 'skip'): Promise<UseHintResult> {
+export async function requestHint(wordId: number, type: 'letter' | 'skip'): Promise<RequestHintResult> {
   const user = await ensureCurrentUser()
   if (type !== 'letter' && type !== 'skip') return { success: false, error: 'Tipo de pista inválido.' }
 
   const inPlay = await findWordInPlay(prisma, user, wordId)
   if (!inPlay) return { success: false, error: NOT_IN_PLAY }
 
-  const cost = type === 'letter' ? await getLetterCost() : SKIP_COST
+  const costs = await getCosts()
+  const cost = type === 'letter' ? costs.letter : costs.skip
   if (user.neuronas < cost) return { success: false, error: NOT_ENOUGH }
 
   try {
@@ -376,27 +405,29 @@ export async function getGlobalRanking(limit: number = 10): Promise<RankingEntry
 }
 
 export async function getLevelRanking(levelId: number, limit: number = 10) {
-  const [usersWithProgress, ctx] = await Promise.all([
-    prisma.user.findMany({
-      where: { email: { not: null }, progress: { some: { word: { levelId } } } },
-      include: { progress: { where: { word: { levelId }, guessed: true } } },
-      take: limit,
-    }),
+  if (!Number.isInteger(levelId)) return []
+  const take = Math.min(Math.max(1, Math.trunc(limit) || 10), 50)
+  // Ordena y limita en la base (RANK-03): antes se tomaban N usuarios arbitrarios y se ordenaba en JS.
+  const [rows, ctx] = await Promise.all([
+    prisma.$queryRaw<{ id: string; name: string | null; username: string | null; image: string | null; levelPoints: number; levelTime: number }[]>`
+      SELECT u.id, u.name, u.username, u.image,
+             COUNT(*) FILTER (WHERE p.guessed)::int AS "levelPoints",
+             COALESCE(SUM(p."timeTaken") FILTER (WHERE p.guessed), 0)::float8 AS "levelTime"
+      FROM "User" u
+      JOIN "Progress" p ON p."userId" = u.id
+      JOIN "Word" w ON w.id = p."wordId"
+      WHERE u.email IS NOT NULL AND w."levelId" = ${levelId}
+      GROUP BY u.id
+      ORDER BY "levelPoints" DESC, "levelTime" ASC, u.id ASC
+      LIMIT ${take}`,
     viewerContext(),
   ])
 
-  return usersWithProgress
-    .map((user) => ({
-      name: user.name,
-      username: user.username,
-      image: user.image,
-      levelPoints: user.progress.length,
-      levelTime: user.progress.reduce((acc, p) => acc + (p.timeTaken || 0), 0),
-      isMe: user.id === ctx.viewerId,
-      isFollowed: ctx.followed.has(user.id),
-    }))
-    .sort((a, b) => b.levelPoints - a.levelPoints || a.levelTime - b.levelTime)
-    .slice(0, limit)
+  return rows.map(({ id, ...rest }) => ({
+    ...rest,
+    isMe: id === ctx.viewerId,
+    isFollowed: ctx.followed.has(id),
+  }))
 }
 
 // ---------------------------------------------------------------------------
@@ -418,19 +449,53 @@ export async function getLevels() {
   return prisma.level.findMany({ orderBy: { id: 'asc' } })
 }
 
-export async function checkUsername(username: string) {
-  const existingUser = await prisma.user.findUnique({ where: { username } })
+// Límite en memoria por jugador para checkUsername (USER-07). Es por proceso: alcanza para
+// frenar la enumeración desde un navegador; no reemplaza un límite global.
+const usernameChecks = new Map<string, number[]>()
+
+function allowUsernameCheck(userId: string): boolean {
+  const now = Date.now()
+  const recent = (usernameChecks.get(userId) ?? []).filter((t) => now - t < 60_000)
+  if (recent.length >= USERNAME_CHECKS_PER_MINUTE) {
+    usernameChecks.set(userId, recent)
+    return false
+  }
+  recent.push(now)
+  usernameChecks.set(userId, recent)
+  if (usernameChecks.size > 10_000) {
+    usernameChecks.forEach((v, k) => {
+      if (v.every((t) => now - t >= 60_000)) usernameChecks.delete(k)
+    })
+  }
+  return true
+}
+
+export async function checkUsername(
+  username: string
+): Promise<{ available: boolean; error?: 'no_identity' | 'rate_limited' }> {
+  const user = await getCurrentUser()
+  if (!user) return { available: false, error: 'no_identity' }
+  if (!allowUsernameCheck(user.id)) return { available: false, error: 'rate_limited' }
+  if (!isValidUsername(username)) return { available: false }
+  const existingUser = await prisma.user.findUnique({ where: { username }, select: { id: true } })
   return { available: !existingUser }
 }
 
-export async function updateUsername(username: string) {
+export async function updateUsername(username: string): Promise<{ success: boolean; error?: string; alreadySet?: true }> {
   const user = await getCurrentUser()
   if (!user) return { success: false, error: 'Unauthorized' }
+  if (!isValidUsername(username)) {
+    return { success: false, error: 'El nombre debe tener entre 3 y 15 letras, números o guiones bajos.' }
+  }
 
   try {
-    await prisma.user.update({ where: { id: user.id }, data: { username } })
+    // Solo se fija una vez (USER-02): el UPDATE condicional evita carreras entre pestañas.
+    const updated = await prisma.user.updateMany({ where: { id: user.id, username: null }, data: { username } })
+    // alreadySet: el cliente cierra el modal (p. ej. el alias llegó migrado desde el invitado, SYNC-10).
+    if (updated.count === 0) return { success: false, error: 'Ya elegiste tu nombre y no se puede cambiar.', alreadySet: true }
     return { success: true }
-  } catch {
-    return { success: false, error: 'Error updating username' }
+  } catch (error) {
+    if ((error as { code?: string })?.code === 'P2002') return { success: false, error: 'Ese nombre ya está en uso.' }
+    return { success: false, error: 'No se pudo guardar el nombre.' }
   }
 }

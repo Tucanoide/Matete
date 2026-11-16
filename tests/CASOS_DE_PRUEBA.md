@@ -1,13 +1,19 @@
 # Casos de prueba — Matete Web
 
-**Versión:** 1.0 · **Fecha:** 2026-08-06 · **Base:** commit `52f9c16`
-**Documento hermano:** [CODE_REVIEW.md](../CODE_REVIEW.md)
+**Versión:** 2.1 · **Fecha:** 2026-11-16 · **Base:** branch `002-social` (incluye `001-hardening`)
+**Documentos relacionados:** [specs/001-hardening](../specs/001-hardening/spec.md) · [specs/002-social](../specs/002-social/spec.md) · `CODE_REVIEW.md` (local, **no se versiona**: el repo es público y ese archivo describe infraestructura de producción)
 
-Catálogo de casos de prueba para guiar la escritura de tests automáticos. Cada caso tiene un ID estable que debe citarse en el nombre del test, para que el mapeo sobreviva a los refactors:
+Catálogo de casos de prueba de la app. Cada caso tiene un ID estable que se cita en el nombre del test, para que el mapeo sobreviva a los refactors:
 
 ```ts
 it('[GAME-03] no acredita puntaje al re-enviar una palabra ya resuelta', async () => { ... })
 ```
+
+Para ver qué tests cubren un caso: `grep -rn "\[GAME-03\]" src`.
+
+**Cambios de la v2.1 (2026-11-16):** tres ciclos de prueba y corrección cerraron los 12 defectos abiertos y los parciales/sin cobertura que tenían defecto detrás (AUTH-08, SYNC-08, USER-07, DATA-05, DATA-06, UI-16). Casos nuevos: SYNC-10, RANK-07, UI-21, UI-22 y SOC-25. La Server Action `useHint` pasó a llamarse `requestHint` (el prefijo `use` la hacía pasar por un hook de React). Queda abierto solo AUTH-09 (login real con Google, manual).
+
+**Cambios respecto de la v1.0 (2026-08-06):** los defectos que corrigió `001-hardening` pasan a ✅ con su test; se agregan el caso de inicio (INI), los de identidad firmada (AUTH-10..12), entrega y formato (GAME-12, GAME-13), fin de juego (PROG-09), alias en la migración (SYNC-09), UI (UI-17..19), infraestructura pública (INFRA-06) y las funciones sociales (SOC). Los casos que describían código que ya no existe (`recordWordSolved`, `getRandomWordFromLevel`, `getUser`, cookie `matete-guest-id` como única identidad) se reescribieron sobre el código actual.
 
 ---
 
@@ -17,17 +23,18 @@ it('[GAME-03] no acredita puntaje al re-enviar una palabra ya resuelta', async (
 
 | Símbolo | Significado |
 |---|---|
-| ✅ | Cubierto por un test existente que pasa |
-| ⚠️ | Cubierto parcialmente, o cubierto con mocks que no validan lo que importa |
-| ❌ | Sin cobertura |
-| 🔴 | **Sin cobertura y el comportamiento esperado falla hoy.** Escribir el test primero: debe fallar, y pasar recién cuando se corrija el defecto |
+| ✅ | Cubierto por un test que pasa (o por una verificación manual registrada, cuando el tipo es `manual`) |
+| ⚠️ | Cubierto parcialmente |
+| ❌ | Sin cobertura; no se sabe si falla |
+| 🔴 | **Defecto abierto.** El comportamiento esperado falla hoy (reproducido o verificado en el código). No hay test en la suite porque fallaría: escribirlo junto con la corrección |
+| ➖ | No aplica con la configuración actual |
 
 ### Tipo
 
 | Tipo | Entorno | Corre con |
 |---|---|---|
 | `unit` | Vitest + jsdom, dependencias mockeadas | `npm test` |
-| `int` | Vitest + **Postgres real** (ver Anexo A) | `npm run test:int` (a crear) |
+| `int` | Vitest + **Postgres real** (ver Anexo A) | `npm run test:integration` |
 | `e2e` | Navegador real contra la app levantada | Playwright (a incorporar) |
 | `manual` | Verificación humana o de línea de comandos | — |
 
@@ -41,802 +48,728 @@ it('[GAME-03] no acredita puntaje al re-enviar una palabra ya resuelta', async (
 
 ## Resumen de cobertura
 
-| Área | Casos | ✅ | ⚠️ | ❌ | 🔴 |
-|---|---|---|---|---|---|
-| AUTH — Identidad y sesión | 9 | 0 | 1 | 4 | 4 |
-| GAME — Resolución y puntaje | 11 | 1 | 2 | 4 | 4 |
-| HINT — Pistas y economía | 10 | 3 | 1 | 4 | 2 |
-| PROG — Progresión de niveles | 8 | 3 | 1 | 3 | 1 |
-| SYNC — Migración invitado→cuenta | 8 | 2 | 1 | 2 | 3 |
-| RANK — Rankings | 6 | 1 | 0 | 3 | 2 |
-| USER — Alias | 7 | 1 | 0 | 3 | 3 |
-| DATA — Schema, migraciones, seed | 6 | 0 | 0 | 3 | 3 |
-| UI — Interacción del cliente | 16 | 14 | 0 | 2 | 0 |
-| INFRA — Dependencias y build | 5 | 0 | 0 | 3 | 2 |
-| **Total** | **86** | **25** | **6** | **31** | **24** |
+| Área | Casos | ✅ | ⚠️ | ❌ | 🔴 | ➖ |
+|---|---|---|---|---|---|---|
+| INI — Primer ingreso | 1 | 1 | 0 | 0 | 0 | 0 |
+| AUTH — Identidad y sesión | 12 | 11 | 0 | 1 | 0 | 0 |
+| GAME — Resolución y puntaje | 13 | 13 | 0 | 0 | 0 | 0 |
+| HINT — Pistas y economía | 10 | 9 | 0 | 0 | 0 | 1 |
+| PROG — Progresión de niveles | 9 | 9 | 0 | 0 | 0 | 0 |
+| SYNC — Migración invitado→cuenta | 10 | 10 | 0 | 0 | 0 | 0 |
+| RANK — Rankings | 7 | 7 | 0 | 0 | 0 | 0 |
+| USER — Alias | 7 | 7 | 0 | 0 | 0 | 0 |
+| DATA — Schema, migraciones, datos | 7 | 7 | 0 | 0 | 0 | 0 |
+| UI — Interacción del cliente | 21 | 21 | 0 | 0 | 0 | 0 |
+| INFRA — Dependencias, build, repo | 6 | 6 | 0 | 0 | 0 | 0 |
+| SOC — Funciones sociales | 25 | 25 | 0 | 0 | 0 | 0 |
+| **Total** | **128** | **126** | **0** | **1** | **0** | **1** |
 
-Los 36 tests que existen hoy se concentran en UI (14 de 16 casos cubiertos). La brecha está en todo lo que toca la base de datos: las Server Actions se testean con Prisma mockeado, lo que verifica que el código llama a Prisma como el autor espera, no que la base acepte esas operaciones.
+Suites al 2026-11-16: **121 tests unit/componentes** (18 archivos) y **128 de integración** contra Postgres real (11 archivos), todos en verde. `tsc --noEmit`, `npm run lint` (0 errores, 0 warnings), `npm audit --audit-level=high` y `next build` pasan.
+
+El único caso sin cobertura es AUTH-09 (login real con Google), que es manual y queda a cargo del dueño junto con las tareas del Anexo B.
+
+---
+
+## INI — Primer ingreso
+
+### INI-01 — Ingreso sin login con nombre de fantasía
+**Tipo:** `int` + `unit` · **Prioridad:** P1 · **Estado:** ✅
+**Tests:** `src/test/integration/onboarding.int.test.ts`, `GameEngine.test.tsx` (`[INI-01]`)
+
+- **Precondición:** Navegador sin cookies ni sesión de Google.
+- **Pasos y esperado:**
+  1. Abrir la home → se muestra la primera palabra del nivel 1 con 50 neuronas, **sin** pedir nombre. La respuesta no contiene la solución. Todavía no se crea ningún usuario.
+  2. Al montarse el juego (`startWord`) → se crea un invitado `Explorador Anónimo` (`email: null`, `username: null`, 50 neuronas, nivel 1) y la cookie `matete-guest` firmada, `httpOnly`, `sameSite: lax`.
+  3. Recargar → aparece el modal "¡IDENTIFICATE!" (`needsUsername: true`).
+  4. Escribir un nombre de fantasía (`Zorro Azul!` se filtra a `ZorroAzul`), que figura disponible, y confirmar → el modal se cierra y el juego sigue visible. El invitado queda con `username: 'ZorroAzul'` y `email: null`.
+  5. Volver a entrar → no se pide nombre de nuevo y es el mismo jugador (misma cookie, un solo usuario).
+  6. Resolver una palabra → +10 neuronas, +1 punto acreditados a ese invitado.
+  7. Desde otro navegador, `ZorroAzul` figura como tomado.
+  8. Con alias pero sin Google: no aparece en el ranking global y comentar, seguir o desafiar responden `login_required`. Compartir el resultado sí funciona (SOC-03).
+- **Observaciones de producto (decisiones abiertas, no son fallas):**
+  - El modal **no se puede cerrar**: desde la segunda carga el alias es obligatorio en la práctica, aunque el servidor deja jugar sin él.
+  - En la **primera** visita no se pide alias; recién en la siguiente carga.
+- **Resuelto el 2026-11-16:** el texto del modal ya no promete el ranking a invitados ("Elegí tu nombre de fantasía para jugar. Si después entrás con Google, lo conservás y aparece en el ranking"), y el alias pasa a la cuenta al entrar con Google (SYNC-09, SYNC-10).
 
 ---
 
 ## AUTH — Identidad y sesión
 
-> Los casos AUTH-02 a AUTH-05 son la prioridad más alta del catálogo. Hoy la identidad del invitado se deriva de un `id` de usuario sin firmar que además se publica en el ranking.
+> Corregido en `001-hardening` (S-1): la identidad del invitado es una cookie firmada con HMAC (`matete-guest`), `httpOnly`, que solo puede resolver a usuarios sin email. Ninguna respuesta expone `User.id`.
 
 ### AUTH-01 — Un visitante sin cookie ni sesión recibe usuario nuevo
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ❌
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `identity.int.test.ts`
 
-- **Precondición:** Sin cookie `matete-guest-id`, sin sesión de NextAuth.
-- **Pasos:** Invocar `ensureUser()`.
-- **Esperado:** Se crea un `User` con `name: 'Explorador Anónimo'`, `neuronas: 50`, `levelId: 1`, `email: null`. Se emite la cookie de invitado.
-
----
-
-### AUTH-02 — La cookie de invitado **no** debe dar acceso a una cuenta autenticada 🔴
-**Tipo:** `int` · **Prioridad:** **P0** · **Ref:** S-1
-
-- **Precondición:** Existe un usuario `victima` con `email: 'victima@example.com'` (cuenta de Google) e `id` conocido.
-- **Pasos:**
-  1. Sin sesión de NextAuth, setear la cookie `matete-guest-id` con el `id` de `victima`.
-  2. Invocar `getUser()`.
-- **Esperado:** Devuelve `null`. Una cookie de invitado nunca debe resolver a una cuenta con `email`.
-- **Comportamiento actual:** Devuelve el usuario `victima` completo. A partir de ahí `useHint`, `updateUsername` y `moveToNextLevel` operan sobre esa cuenta.
+- **Pasos:** Invocar cualquier action que cree identidad (`startWord`) sin cookie ni sesión.
+- **Esperado:** Se crea un `User` con `name: 'Explorador Anónimo'`, `neuronas: 50`, `levelId: 1`, `email: null` y se emite `matete-guest`. Otro navegador recibe otro usuario.
 
 ---
 
-### AUTH-03 — Los rankings no exponen identificadores internos 🔴
-**Tipo:** `int` · **Prioridad:** **P0** · **Ref:** S-1
+### AUTH-02 — La cookie de invitado no da acceso a una cuenta registrada
+**Tipo:** `int` · **Prioridad:** **P0** · **Estado:** ✅ · **Ref:** S-1 · **Tests:** `identity.int.test.ts`
 
-- **Pasos:** Invocar `getGlobalRanking(10)` y `getLevelRanking(1, 10)`.
-- **Esperado:** Ningún objeto del resultado contiene la propiedad `id`.
-- **Comportamiento actual:** `getGlobalRanking` hace `select: { id: true }` y el `id` viaja al navegador, que es lo que hace explotable a AUTH-02.
-- **Nota de implementación:** al quitar `id`, `RankingBoard` necesita otra `key` de React (el índice sirve; la lista es de solo lectura y de tamaño fijo).
+- **Pasos:** Sin sesión, presentar una cookie firmada válida —o la cookie vieja `matete-guest-id`— con el `id` de una cuenta de Google.
+- **Esperado:** Se rechaza y el visitante se trata como nuevo; la cuenta no recibe ningún cambio.
 
 ---
 
-### AUTH-04 — La cookie de invitado no debe ser legible por JavaScript 🔴
-**Tipo:** `int` · **Prioridad:** P1 · **Ref:** S-1
+### AUTH-03 — Los rankings no exponen identificadores internos
+**Tipo:** `int` · **Prioridad:** **P0** · **Estado:** ✅ · **Ref:** S-1 · **Tests:** `identity.int.test.ts`, `follows.int.test.ts`
 
-- **Pasos:** Invocar `ensureUser()` sobre un visitante nuevo e inspeccionar las opciones con las que se setea la cookie.
-- **Esperado:** `httpOnly: true`, `sameSite: 'lax'`, y `secure: true` cuando `NODE_ENV === 'production'`.
-- **Comportamiento actual:** Solo se pasan `maxAge` y `path`.
+- **Esperado:** Ningún objeto de `getGlobalRanking`, `getLevelRanking` ni `getFriendsRanking` tiene `id`. `RankingBoard` usa la posición como `key`.
 
 ---
 
-### AUTH-05 — Una cookie de invitado con un `id` inexistente no rompe la app
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ❌
+### AUTH-04 — La cookie de invitado no es legible por JavaScript
+**Tipo:** `int` + `unit` · **Prioridad:** P1 · **Estado:** ✅ · **Ref:** S-1 · **Tests:** `identity.int.test.ts`, `guest-cookie.test.ts`
 
-- **Pasos:** Setear `matete-guest-id` con un valor arbitrario (`'no-existe'`, string vacío, 10.000 caracteres, `"'; DROP TABLE ..."`), cargar la home.
-- **Esperado:** La página renderiza normalmente tratando al visitante como nuevo. Sin excepción no capturada.
+- **Esperado:** `httpOnly: true`, `sameSite: 'lax'`, `path: '/'`, y `secure: true` solo con `NODE_ENV === 'production'`.
 
 ---
 
-### AUTH-06 — Con sesión autenticada, la cookie de invitado se ignora
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ❌
+### AUTH-05 — Una cookie con valor arbitrario no rompe la app
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`
 
-- **Precondición:** Sesión válida de `usuario-a`; cookie `matete-guest-id` apuntando a `usuario-b`.
-- **Pasos:** Invocar `getUser()`.
-- **Esperado:** Devuelve `usuario-a`. La sesión siempre gana.
+- **Pasos:** Setear `matete-guest` y `matete-guest-id` (con la ventana legacy abierta) a `'no-existe'`, `''`, 10.000 caracteres y `"'; DROP TABLE ..."`. Renderizar la home y jugar.
+- **Esperado:** Se trata como visitante nuevo, sin excepción.
+
+---
+
+### AUTH-06 — Con sesión de Google la cookie de invitado se ignora
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`
+
+- **Esperado:** Con sesión de `a` y cookie de invitado `b`, todo opera sobre `a`.
 
 ---
 
 ### AUTH-07 — Sesión válida cuyo email ya no existe en la base
-**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ❌
+**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`
 
-- **Precondición:** Sesión con `email` que no corresponde a ningún `User` (cuenta borrada).
-- **Esperado:** No cae al camino de la cookie de invitado. Devuelve `null` o fuerza re-login.
-- **Nota:** Hoy `getUser()` cae al bloque de la cookie, encadenando con AUTH-02.
+- **Esperado:** Nunca resuelve a otra cuenta registrada, aunque la cookie apunte a una. Cae al camino de invitado (crea o usa un invitado sin email). Desde 001 esto es seguro porque la cookie solo resuelve invitados.
 
 ---
 
 ### AUTH-08 — La sesión expone los campos extendidos
-**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ⚠️
+**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`, `fixes.int.test.ts`
 
-- **Pasos:** Ejecutar el callback `session` de `authOptions` con un usuario conocido.
-- **Esperado:** `session.user` incluye `id`, `points`, `neuronas` y `levelId` leídos de la base.
-- **Nota:** Verificar también el fallback cuando `dbUser` es `null`. Hoy usa `neuronas: 150`, que no coincide ni con el schema (50) ni con la migración (150) — ver DATA-04.
+- **Esperado:** El callback `session` agrega `points`, `neuronas` y `levelId` de la base; si no encuentra el usuario usa `0 / 50 / 1`. **No** agrega `session.user.id` (constitución, principio 2).
+- **Corregido el 2026-11-16 (ciclos de prueba):** se quitó `session.user.id` del callback y del tipo `Session`.
 
 ---
 
-### AUTH-09 — Login con Google end-to-end
-**Tipo:** `e2e` · **Prioridad:** P1 · **Estado:** ❌
+### AUTH-09 — Login con Google de punta a punta
+**Tipo:** `e2e` / `manual` · **Prioridad:** P1 · **Estado:** ❌
 
-- **Pasos:** Click en "Ingresar" → completar OAuth de Google → volver a la home.
-- **Esperado:** El header muestra el nombre del jugador; `getUser()` resuelve por email.
-- **Nota:** Requiere `next-auth >= 4.24.15` por [GHSA-x445-f3h2-j279](https://github.com/advisories/GHSA-x445-f3h2-j279) (cookies de `state`/`nonce`/PKCE no ligadas al provider). Ver INFRA-01.
+- **Pasos:** Click en "Ingresar" → OAuth de Google → volver a la home. Repetir desde el link de un desafío (vuelve al desafío).
+- **Esperado:** El header muestra el nombre; si había progreso de invitado, se migra (SYNC-01).
+- **Nota:** requiere actualizar `next-auth` (INFRA-01). Prueba manual a cargo del dueño (quickstart de 001 §3 y de 002 §2).
+
+---
+
+### AUTH-10 — Cookie alterada, vencida o firmada con otra clave
+**Tipo:** `int` + `unit` · **Prioridad:** **P0** · **Estado:** ✅ · **Ref:** S-1 · **Tests:** `identity.int.test.ts`, `guest-cookie.test.ts`
+
+- **Esperado:** Cualquier carácter cambiado, firma reutilizada con otro `id`, otra clave, token vencido (30 días) o el `id` en claro → se rechaza y se crea un visitante nuevo, sin tocar al jugador original. Sin `GUEST_COOKIE_SECRET` (o con menos de 16 caracteres) no se emiten ni aceptan cookies (falla cerrado).
+
+---
+
+### AUTH-11 — Transición de la cookie vieja (30 días)
+**Tipo:** `int` + `unit` · **Prioridad:** P1 · **Estado:** ✅ · **Ref:** FR-004 de 001 · **Tests:** `identity.int.test.ts`, `guest-cookie.test.ts`
+
+- **Esperado:** Mientras `now < GUEST_LEGACY_COOKIE_UNTIL`, la cookie `matete-guest-id` de un **invitado** se acepta y en la siguiente Server Action se reemplaza por una firmada (en un Server Component no se puede escribir la cookie: no rompe el render). Vencido el plazo, o sin la variable, se rechaza.
+
+---
+
+### AUTH-12 — La resolución de identidad no está expuesta como Server Action
+**Tipo:** `int` · **Prioridad:** **P0** · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`
+
+- **Esperado:** `src/app/actions/game.ts` y `sync.ts` no exportan `getUser`, `ensureUser`, `getCurrentUser` ni `ensureCurrentUser` (viven en `src/lib/identity.ts`, que no es `'use server'`). Antes de 001, `getUser` era invocable desde el navegador y devolvía el usuario completo.
 
 ---
 
 ## GAME — Resolución de palabras y puntaje
 
-### GAME-01 — La palabra correcta no viaja al cliente 🔴
-**Tipo:** `int` · **Prioridad:** **P0** · **Ref:** S-2
+> Corregido en `001-hardening` (S-2, S-3, S-4): el navegador recibe una `PublicWord` (definición, largo, pool de 14 letras y letras reveladas) y `submitGuess` valida y acredita en el servidor una sola vez.
 
-- **Pasos:** Invocar `getInitialGameState()` y `getRandomWordFromLevel(1)`.
-- **Esperado:** El objeto devuelto expone `id`, `description` y `length`, pero **no** `word`.
-- **Comportamiento actual:** Se devuelve la fila `Word` completa y `page.tsx` la serializa en el HTML como `initialWord`.
-- **Verificación complementaria (`e2e`):** cargar la home y comprobar que la solución no aparece en el HTML inicial ni en la respuesta de la Server Action.
+### GAME-01 — La solución no viaja al cliente
+**Tipo:** `int` + `unit` · **Prioridad:** **P0** · **Estado:** ✅ · **Ref:** S-2 · **Tests:** `guess-and-economy.int.test.ts`, `public-word.test.ts`, `GameEngine.test.tsx`
 
----
-
-### GAME-02 — La validación de la respuesta ocurre en el servidor 🔴
-**Tipo:** `int` · **Prioridad:** **P0** · **Ref:** S-2
-
-- **Precondición:** Existe una action `submitGuess(wordId, guess)` (a implementar).
-- **Pasos:** Invocar `submitGuess(1, 'RESPUESTA_INCORRECTA')`.
-- **Esperado:** `{ correct: false }`, sin acreditar neuronas ni puntos.
-- **Y:** `submitGuess(1, '<respuesta correcta>')` → `{ correct: true }` y acredita **una sola vez**.
+- **Esperado:** `getInitialGameState`, `getNextWord` y `moveToNextLevel` devuelven `PublicWord`, sin la solución en ningún campo. Verificado también en el HTML real de la home (001, quickstart).
 
 ---
 
-### GAME-03 — Resolver la misma palabra dos veces acredita una sola vez 🔴
-**Tipo:** `int` · **Prioridad:** **P0** · **Ref:** S-3
+### GAME-02 — La validación de la respuesta ocurre en el servidor
+**Tipo:** `int` · **Prioridad:** **P0** · **Estado:** ✅ · **Ref:** S-2 · **Tests:** `guess-and-economy.int.test.ts`
 
-- **Precondición:** `usuario` con `neuronas: 50`, `points: 0`. Palabra `1` sin resolver.
-- **Pasos:** Invocar `recordWordSolved(1, 30)` **dos veces** seguidas.
-- **Esperado:** Al final, `neuronas === 60` y `points === 1`.
-- **Comportamiento actual:** `neuronas === 70`, `points === 2`. El `progress.upsert` es idempotente pero el `user.update` con `increment` corre siempre.
-- **Variante P0:** repetir 100 veces en un bucle → sigue siendo `+10` y `+1`.
+- **Esperado:** `submitGuess(id, incorrecta)` → `{ correct: false }` sin cambios y sin revelar qué letras fallaron. Con la correcta (sin distinguir mayúsculas) → `{ correct: true, solution, ... }`.
 
 ---
 
-### GAME-04 — Llamadas concurrentes a `recordWordSolved` no duplican el premio
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ❌ · **Ref:** S-3
+### GAME-03 — Acertar la misma palabra varias veces acredita una sola vez
+**Tipo:** `int` · **Prioridad:** **P0** · **Estado:** ✅ · **Ref:** S-3 · **Tests:** `guess-and-economy.int.test.ts`
 
-- **Pasos:** `await Promise.all([recordWordSolved(1, 30), recordWordSolved(1, 30)])`.
-- **Esperado:** Una sola acreditación. Requiere que la corrección de GAME-03 use `$transaction`, no un check-then-act.
-
----
-
-### GAME-05 — `timeTaken` lo calcula el servidor 🔴
-**Tipo:** `int` · **Prioridad:** P1 · **Ref:** S-4
-
-- **Pasos:** Entregar una palabra, esperar ~2 s, resolverla enviando `timeTaken: 0` desde el cliente.
-- **Esperado:** El `Progress` persistido tiene `timeTaken >= 2`, derivado de `startTime`. El valor del cliente se ignora.
-- **Comportamiento actual:** Se persiste el `0`, lo que gana todos los desempates del ranking global (`orderBy: totalTime asc`).
+- **Esperado:** 100 `submitGuess` correctos → `+10` neuronas y `+1` punto en total. Los siguientes responden `alreadySolved: true`.
 
 ---
 
-### GAME-06 — `recordWordSolved` con un `wordId` inexistente
-**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ❌
+### GAME-04 — Aciertos concurrentes no duplican el premio
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Ref:** S-3 · **Tests:** `guess-and-economy.int.test.ts`
 
-- **Pasos:** `recordWordSolved(999999, 10)`.
-- **Esperado:** `{ success: false, error: 'Word not found' }`, sin efectos en la base.
-
----
-
-### GAME-07 — `recordWordSolved` acredita y registra el progreso
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ⚠️
-
-- **Esperado:** `+10` neuronas, `+1` punto, `+timeTaken` en `totalTime`, y una fila `Progress` con `guessed: true` y `endTime` no nulo.
-- **Nota:** cubierto por `game.server.test.ts` con Prisma mockeado — verifica la intención, no el efecto. Reescribir contra base real.
+- **Esperado:** `Promise.all` de varios aciertos de la misma palabra → una sola acreditación (`UPDATE ... WHERE guessed = false`).
 
 ---
 
-### GAME-08 — `getInitialGameState` con un nivel sin palabras 🔴
-**Tipo:** `int` · **Prioridad:** P1 · **Ref:** B-6
+### GAME-05 — El tiempo lo calcula el servidor
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Ref:** S-4 · **Tests:** `guess-and-economy.int.test.ts`
 
-- **Precondición:** `usuario.levelId = 99`; el nivel 99 existe pero no tiene palabras.
-- **Pasos:** Invocar `getInitialGameState()`.
-- **Esperado:** Devuelve `null` o un estado vacío manejable. La home renderiza el fallback "Cargando base de datos...".
-- **Comportamiento actual:** `words[words.length - 1]` es `undefined` y `lastWord.id` lanza `TypeError`, rompiendo el render del Server Component: la página entera devuelve error.
+- **Esperado:** `timeTaken` = tiempo desde la entrega de la palabra (`Progress.startTime`), medido por Postgres. El cliente no envía tiempo.
 
 ---
 
-### GAME-09 — `getInitialGameState` reanuda en la primera palabra sin resolver
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ❌
+### GAME-06 — Palabra inexistente, de otro nivel o salteada
+**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `guess-and-economy.int.test.ts`
 
-- **Precondición:** Nivel 1 con 5 palabras; las palabras 1 y 2 con `guessed: true`, la 3 con `skipped: true`.
-- **Esperado:** Devuelve la palabra 4, con `revealedIndices` correspondiente a su `Progress` si lo tuviera.
-
----
-
-### GAME-10 — Las palabras saltadas no vuelven a aparecer
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ❌
-
-- **Precondición:** Palabra 3 con `skipped: true`.
-- **Pasos:** Invocar `getRandomWordFromLevel(1)` 50 veces.
-- **Esperado:** La palabra 3 no sale nunca.
+- **Esperado:** `submitGuess` responde `{ error: 'not_in_play' }` sin efectos en la base.
 
 ---
 
-### GAME-11 — Progresión completa de 50 palabras
-**Tipo:** `unit` · **Prioridad:** P1 · **Estado:** ✅
+### GAME-07 — El acierto registra el progreso completo
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`
 
-- Cubierto por `smoke-progression-50.test.tsx` y `actions-progression.test.ts`.
-- **Pendiente:** replicarlo como `int` contra base real, para que valide también el estado persistido y no solo las llamadas mockeadas.
+- **Esperado:** `Progress` con `guessed: true`, `endTime` y `timeTaken` no nulos; `User.totalTime` suma ese tiempo.
+
+---
+
+### GAME-08 — `getInitialGameState` sin palabras disponibles
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Ref:** B-6 · **Tests:** `guess-and-economy.int.test.ts`, `catalog.int.test.ts`
+
+- **Esperado:** Con un nivel vacío sin siguiente nivel, o con todos los niveles completos, devuelve `null` en lugar de lanzar. Lo que ve el jugador en ese caso está en PROG-09.
+
+---
+
+### GAME-09 — Reanuda en la primera palabra sin resolver
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`
+
+- **Precondición:** Nivel 1 con la 1.ª acertada, la 2.ª salteada y la 3.ª con una letra revelada.
+- **Esperado:** Devuelve la 3.ª, con su letra revelada.
+
+---
+
+### GAME-10 — Las palabras salteadas o acertadas no vuelven a aparecer
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`
+
+- **Esperado:** 30 llamadas a `getNextWord` devuelven siempre la única palabra pendiente.
+
+---
+
+### GAME-11 — Progresión completa de un nivel largo
+**Tipo:** `int` + `unit` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `guess-and-economy.int.test.ts`, `smoke-progression-50.test.tsx`
+
+- **Esperado:** Un nivel de 50 palabras se completa exactamente en la 50.ª, con el estado persistido en la base.
+- **Nota:** en producción los niveles tienen entre 5 y 34 palabras; el caso de 50 es un límite superior holgado, y los tests de integración usan además niveles de 2 y 3 palabras.
+
+---
+
+### GAME-12 — La entrega de la palabra se registra una sola vez
+**Tipo:** `int` + `unit` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `guess-and-economy.int.test.ts`, `GameEngine.test.tsx`
+
+- **Esperado:** `GameEngine` llama a `startWord` al montar; repetirlo no crea otra fila ni cambia el `startTime` original (el tiempo no se puede reiniciar recargando).
+
+---
+
+### GAME-13 — Formato del intento
+**Tipo:** `int` + `unit` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `guess-and-economy.int.test.ts`, `public-word.test.ts`
+
+- **Esperado:** Vacío, con caracteres fuera de `[A-Za-zÑñ]` o de largo distinto → `{ error: 'invalid_guess' }`. La ñ se acepta.
 
 ---
 
 ## HINT — Pistas y economía de neuronas
 
-### HINT-01 — Pista de letra descuenta y revela una posición
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ⚠️
+### HINT-01 — Pista de letra cobra y revela una posición
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `guess-and-economy.int.test.ts`
 
-- **Esperado:** `neuronas -= costo`, `Progress.revealedIndices` gana un índice válido dentro del rango de la palabra.
-- **Nota:** cubierto con mocks en `game.server.test.ts`.
-
----
-
-### HINT-02 — Límite de 2 pistas por palabra
-**Tipo:** `unit` · **Prioridad:** P1 · **Estado:** ✅
-
-- Cubierto: `useHint (letter) should fail if limit of 2 is reached`.
+- **Esperado:** Descuenta el costo de `Setting['costo_pista']` (respaldo 5) y devuelve `revealed: { index, letter }` con un índice válido.
 
 ---
 
-### HINT-03 — Sin neuronas suficientes no se descuenta ni se revela
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ❌
+### HINT-02 — Máximo 2 pistas por palabra
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `guess-and-economy.int.test.ts`
 
-- **Precondición:** `usuario.neuronas = 3`, costo de letra 5.
-- **Esperado:** `{ success: false, error: 'Not enough neuronas' }`. `neuronas` sigue en 3 y `revealedIndices` no cambia.
-
----
-
-### HINT-04 — Dos pistas concurrentes no dejan saldo negativo 🔴
-**Tipo:** `int` · **Prioridad:** P1 · **Ref:** S-5
-
-- **Precondición:** `usuario.neuronas = 5`, costo de letra 5.
-- **Pasos:** `await Promise.all([useHint(1, 'letter'), useHint(2, 'letter')])`.
-- **Esperado:** Exactamente una tiene éxito. `neuronas === 0`.
-- **Comportamiento actual:** Ambas pasan el `if (user.neuronas < cost)` antes de que ninguna descuente → `neuronas === -5`.
+- **Esperado:** La tercera se rechaza sin cobrar.
 
 ---
 
-### HINT-05 — No se puede pistar una palabra ya resuelta
-**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ❌ · **Ref:** B-5
+### HINT-03 — Sin saldo no se cobra ni se revela
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`, `guess-and-economy.int.test.ts`
 
-- **Precondición:** Palabra 1 con `guessed: true`.
-- **Esperado:** `{ success: false }` sin descontar neuronas.
+- **Esperado:** Con 3 neuronas y costo 5 → `{ success: false, error: 'Not enough neuronas' }`, saldo y letras reveladas intactos. Lo mismo para el salto.
 
 ---
 
-### HINT-06 — No se puede pistar una palabra de otro nivel
-**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ❌ · **Ref:** B-5
+### HINT-04 — Pedidos concurrentes no dejan saldo negativo
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Ref:** S-5 · **Tests:** `guess-and-economy.int.test.ts`
 
-- **Precondición:** `usuario.levelId = 1`; `wordId` pertenece al nivel 5.
-- **Esperado:** `{ success: false }` sin descontar neuronas.
+- **Esperado:** Con saldo para una sola, dos pistas simultáneas → se cobra una y el saldo queda ≥ 0.
+
+---
+
+### HINT-05 — No se puede pedir pista ni saltar una palabra ya acertada
+**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ✅ · **Ref:** B-5 · **Tests:** `guess-and-economy.int.test.ts`
+
+---
+
+### HINT-06 — No se puede pedir pista ni saltar una palabra de otro nivel
+**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ✅ · **Ref:** B-5 · **Tests:** `catalog.int.test.ts`
 
 ---
 
 ### HINT-07 — Todas las letras ya reveladas
-**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ❌
+**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ➖
 
-- **Precondición:** Palabra de 2 letras con ambas posiciones en `revealedIndices`.
-- **Esperado:** `{ success: false, error: 'No hay más letras para revelar.' }` sin descontar.
-- **Nota:** hoy el límite de 2 pistas enmascara este camino para palabras cortas; se vuelve alcanzable si el límite se hace configurable.
-
----
-
-### HINT-08 — Saltar descuenta 15 y marca la palabra
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ⚠️
-
-- **Esperado:** `neuronas -= 15` y `Progress.skipped = true`.
-- **Nota:** cubierto con mocks.
+- **Esperado:** `{ success: false, error: 'No hay más letras para revelar.' }` sin cobrar.
+- **No aplica hoy:** el límite de 2 pistas se evalúa antes y todas las palabras tienen 4 letras o más, así que el camino es inalcanzable. Pasa a aplicar si el límite se vuelve configurable.
 
 ---
 
-### HINT-09 — El costo mostrado coincide con el cobrado 🔴
-**Tipo:** `int` + `e2e` · **Prioridad:** P1 · **Ref:** B-4
+### HINT-08 — Saltar cobra 15 y marca la palabra
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `guess-and-economy.int.test.ts`
 
-- **Precondición:** `Setting['costo_pista'] = '8'`.
-- **Esperado:** El botón dice "LETRA (-8 N)", se deshabilita con `neuronas < 8`, y el servidor cobra 8.
-- **Comportamiento actual:** El botón sigue diciendo "-5 N" y se habilita con 5 neuronas (hardcodeado en `GameEngine.tsx`); el servidor cobra 8. El jugador clickea y la operación falla.
-- **Verificar también:** `Level.costJump` / `costLetter` / `costHelp` existen en el schema y **no se leen nunca**; el costo de salto está hardcodeado en 15 en el servidor.
+- **Esperado:** `neuronas -= 15`, `Progress.skipped = true`; saltos simultáneos cobran una sola vez.
 
 ---
 
-### HINT-10 — Fallo de `useHint` al saltar no deja el juego trabado
-**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ❌ · **Ref:** B-8
+### HINT-09 — El costo mostrado coincide con el cobrado
+**Tipo:** `int` + `unit` · **Prioridad:** P1 · **Estado:** ✅ · **Ref:** B-4 · **Tests:** `fixes.int.test.ts`, `GameEngine.test.tsx`, `page.test.tsx`
 
-- **Pasos:** Mockear `useHint` para que rechace. Click en "SALTAR".
-- **Esperado:** El error se captura, `isLoadingNext` vuelve a `false` y los botones se rehabilitan.
-- **Comportamiento actual:** `handleSkip` no tiene `try/catch` (a diferencia de `handleGiveHint`): la excepción se propaga, `isLoadingNext` queda en `true` y el juego se congela.
-- **Y:** ante `UnrecognizedActionError`, debe aparecer el modal "Sincronización requerida".
+- **Precondición:** `Setting['costo_pista'] = '8'`, `Setting['costo_salto'] = '20'`.
+- **Esperado:** `getInitialGameState` devuelve `costs: { letter: 8, skip: 20 }`; los botones dicen "LETRA (-8 N)" y "SALTAR (-20 N)", se deshabilitan por debajo de esos valores y el servidor cobra exactamente eso. Sin configuración: 5 y 15.
+- **Corregido el 2026-11-16 (ciclos de prueba):** los costos viven solo en `Setting` (constitución, principio 4) y el cliente los recibe del servidor. **Decisión abierta:** los costos por nivel de `Level` (`costJump`, `costLetter`, `costHelp`) siguen sin usarse; adoptarlos cambiaría la economía (en producción valen 35/25/30).
+
+---
+
+### HINT-10 — Un error al saltar no deja el juego trabado
+**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ✅ · **Ref:** B-8 · **Tests:** `GameEngine.test.tsx`
+
+- **Esperado:** Si `requestHint` falla, los botones se rehabilitan y aparece "No pudimos saltar la palabra"; ante `UnrecognizedActionError`, "Sincronización requerida".
+- **Corregido el 2026-11-16 (ciclos de prueba):** `try/catch/finally` en `handleSkip`.
 
 ---
 
 ## PROG — Progresión de niveles
 
 ### PROG-01 — El nivel se completa al procesar la última palabra
-**Tipo:** `unit` · **Prioridad:** P1 · **Estado:** ✅
-
-- Cubierto: `should complete the level exactly on the 50th word`.
+**Tipo:** `int` + `unit` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `guess-and-economy.int.test.ts`, `smoke-progression-50.test.tsx`
 
 ---
 
-### PROG-02 — Las saltadas cuentan para completar el nivel
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ❌
+### PROG-02 — Las salteadas cuentan para completar el nivel
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `guess-and-economy.int.test.ts`
 
-- **Precondición:** Nivel con 5 palabras: 4 `guessed`, 1 `skipped`.
-- **Esperado:** `isLevelComplete === true`, `levelStats.solved === 5`.
+- **Esperado:** Saltar la última palabra pendiente devuelve `isLevelComplete: true`.
 
 ---
 
 ### PROG-03 — `moveToNextLevel` avanza y entrega la primera palabra
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ⚠️
-
-- **Esperado:** `user.levelId` incrementa y `nextWord` es la de menor `id` del nuevo nivel.
-- **Nota:** cubierto con mocks.
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `guess-and-economy.int.test.ts`
 
 ---
 
 ### PROG-04 — `moveToNextLevel` en el último nivel
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ❌
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`
 
-- **Precondición:** `usuario.levelId` es el máximo existente.
-- **Esperado:** No avanza a un nivel inexistente. Devuelve un estado de "juego completado" manejable.
-- **Comportamiento actual:** Incrementa `levelId` a un nivel que no existe y devuelve `nextWord: null`; en la siguiente carga, `getInitialGameState` no encuentra el nivel y devuelve `null`.
+- **Esperado:** `{ success: false, error: 'No hay más niveles.' }` y `levelId` sin cambios.
 
 ---
 
 ### PROG-05 — El modal de nivel completado muestra las estadísticas
-**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ✅
-
-- Cubierto: `should show LevelUpModal when current level is completed` y el test de `Modals.test.tsx`.
+**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `GameEngine.test.tsx`, `Modals.test.tsx`
 
 ---
 
 ### PROG-06 — El botón del modal avanza de nivel
-**Tipo:** `unit` · **Prioridad:** P1 · **Estado:** ✅
-
-- Cubierto: `should call moveToNextLevel and update state when level up modal button is clicked`.
+**Tipo:** `unit` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `GameEngine.test.tsx`
 
 ---
 
-### PROG-07 — `getInitialGameState` auto-avanza si el nivel está completo
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ❌
+### PROG-07 — `getInitialGameState` avanza solo si el nivel está completo
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`
 
-- **Precondición:** Todas las palabras del nivel 1 procesadas; existe nivel 2.
-- **Esperado:** El usuario queda en `levelId: 2` y recibe la primera palabra del nivel 2.
-
----
-
-### PROG-08 — No se puede saltear un nivel manipulando la llamada 🔴
-**Tipo:** `int` · **Prioridad:** P1
-
-- **Precondición:** `usuario.levelId = 1` con el nivel sin terminar.
-- **Pasos:** Invocar `moveToNextLevel()` directamente.
-- **Esperado:** `{ success: false }`. Solo se avanza con el nivel completo.
-- **Comportamiento actual:** Avanza sin verificar nada. Invocable desde la consola del navegador.
+- **Esperado:** Con el nivel 1 completo (acertadas y salteadas) queda en `levelId: 2` y recibe la primera palabra del nivel 2.
 
 ---
 
-## SYNC — Migración de invitado a cuenta autenticada
+### PROG-08 — No se puede saltear un nivel manipulando la llamada
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `guess-and-economy.int.test.ts`
 
-> Los casos SYNC-01 y SYNC-02 son los dos defectos más graves fuera de seguridad: hoy la migración falla justo cuando hay algo que migrar.
-
-### SYNC-01 — Migrar un invitado **con progreso** 🔴
-**Tipo:** `int` · **Prioridad:** **P0** · **Ref:** B-1
-
-- **Precondición:** Invitado con 3 filas de `Progress`, `points: 3`, `neuronas: 80`, `levelId: 2`. Cuenta autenticada recién creada.
-- **Pasos:** Invocar `migrateGuestProgress()`.
-- **Esperado:**
-  1. Las 3 filas de `Progress` quedan asociadas a la cuenta autenticada.
-  2. El usuario invitado se borra sin error.
-  3. La cookie `matete-guest-id` se elimina.
-  4. `points += 3`, `neuronas += 30`, `levelId = max(1, 2) = 2`.
-- **Comportamiento actual:** `prisma.user.delete` lanza **P2003**, porque `Progress.user` no tiene `onDelete: Cascade` y el FK es `ON DELETE RESTRICT`. La excepción ocurre **después** de incrementar las stats y **antes** de borrar la cookie.
-- **Nota:** el test existente usa `progress: []` — el único caso que no falla.
+- **Esperado:** `moveToNextLevel()` con el nivel incompleto → `{ success: false }`.
 
 ---
 
-### SYNC-02 — La migración no se aplica dos veces 🔴
-**Tipo:** `int` · **Prioridad:** **P0** · **Ref:** B-1
+### PROG-09 — Terminar el último nivel muestra un final de juego
+**Tipo:** `int` + `unit` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `fixes.int.test.ts`, `GameEngine.test.tsx`, `page.test.tsx`
 
-- **Precondición:** La de SYNC-01.
-- **Pasos:** Invocar `migrateGuestProgress()`, luego invocarlo **de nuevo** simulando una recarga de página.
-- **Esperado:** La segunda invocación no encuentra cookie y no hace nada. Las stats se sumaron **una sola vez**.
-- **Comportamiento actual:** Como la primera lanzó antes de borrar la cookie, la segunda vuelve a sumar los mismos puntos. `AuthSync` protege con un `useRef` que se reinicia en cada montaje, así que se repite en cada recarga, indefinidamente.
+- **Esperado:** Al completar el último nivel, `moveToNextLevel` devuelve `gameOver: true` y el juego muestra "¡COMPLETASTE MATETE!". Al recargar, la home usa `getGameCompletion()` y muestra el mismo final con los puntos, no "Cargando base de datos...". Con la base sin palabras, la home lo dice en lugar de cargar para siempre.
+- **Corregido el 2026-11-16 (ciclos de prueba):** `GameOverPanel`, `getGameCompletion` y el campo `gameOver`.
 
 ---
 
-### SYNC-03 — Un invitado que gastó neuronas no le resta a la cuenta 🔴
-**Tipo:** `int` · **Prioridad:** **P0** · **Ref:** B-2
+## SYNC — Migración de invitado a cuenta de Google
 
-- **Precondición:** Invitado con `neuronas: 20` (empezó con 50 y gastó 30). Cuenta autenticada con `neuronas: 100`.
-- **Esperado:** La cuenta queda con `neuronas >= 100`.
-- **Comportamiento actual:** `increment: 20 - 50 = -30` → la cuenta queda con 70. La migración **castiga** al jugador.
+> Corregido en `001-hardening` (B-1, B-2): una transacción bloquea al invitado, fusiona su progreso, lo borra, recalcula puntos y tiempo desde `Progress` y suma solo las neuronas por encima del saldo inicial.
 
----
+### SYNC-01 — Migrar un invitado con progreso
+**Tipo:** `int` · **Prioridad:** **P0** · **Estado:** ✅ · **Ref:** B-1 · **Tests:** `guest-migration.int.test.ts`
 
-### SYNC-04 — Progreso duplicado entre invitado y cuenta
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ❌
-
-- **Precondición:** Ambos resolvieron la palabra 1. La cuenta la resolvió en 10 s, el invitado en 40 s.
-- **Esperado:** Queda una sola fila `Progress` para `(authUser, 1)`. Definir y verificar la política de desempate — se sugiere conservar el mejor tiempo.
-- **Nota:** el `update` del upsert hoy pisa con los valores del invitado sin comparar.
+- **Esperado:** El progreso pasa a la cuenta, el invitado se borra, las cookies de invitado se eliminan, `points` y `totalTime` se recalculan desde `Progress` y `levelId = max(cuenta, invitado)`. Un invitado sin progreso también se borra sin error.
 
 ---
 
-### SYNC-05 — Sin sesión autenticada no se migra
-**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ✅
+### SYNC-02 — La migración no se aplica dos veces
+**Tipo:** `int` · **Prioridad:** **P0** · **Estado:** ✅ · **Ref:** B-1 · **Tests:** `guest-migration.int.test.ts`
 
-- Cubierto: `should return error if no authenticated session is found`.
+- **Esperado:** Recargar 10 veces después de migrar no cambia los totales.
+
+---
+
+### SYNC-03 — Un invitado que gastó neuronas no le resta a la cuenta
+**Tipo:** `int` · **Prioridad:** **P0** · **Estado:** ✅ · **Ref:** B-2 · **Tests:** `guest-migration.int.test.ts`
+
+- **Esperado:** `neuronas += max(0, invitado − 50)`. Un invitado con 40 no resta; uno con 60 suma 10.
+
+---
+
+### SYNC-04 — Palabra resuelta por el invitado y por la cuenta
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `guest-migration.int.test.ts`
+
+- **Esperado:** Queda una sola fila y cuenta una sola vez. **Política:** se conserva el registro de la cuenta (su tiempo), aunque el invitado haya sido más rápido.
+
+---
+
+### SYNC-05 — Sin sesión de Google no se migra
+**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `guest-migration.int.test.ts`
 
 ---
 
 ### SYNC-06 — Sin cookie de invitado no se hace nada
-**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ✅
-
-- Cubierto: `should return success but do nothing if no guest cookie is found`.
+**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `guest-migration.int.test.ts`
 
 ---
 
-### SYNC-07 — Cookie apuntando a un invitado ya borrado
-**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ⚠️
+### SYNC-07 — Cookie que apunta a un invitado ya borrado
+**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`
 
-- **Esperado:** La cookie se limpia y se devuelve un resultado no exitoso sin efectos colaterales.
-- **Nota:** el camino existe en el código (`if (!guestUser) cookieStore.delete(...)`) pero no está testeado.
+- **Esperado:** `{ success: true, migrated: false }`, la cookie se elimina y la cuenta no cambia.
 
 ---
 
 ### SYNC-08 — La migración es atómica
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ❌ · **Ref:** B-1
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Ref:** B-1 · **Tests:** `guest-migration.int.test.ts`, `fixes.int.test.ts`
 
-- **Pasos:** Forzar un fallo a mitad de la transferencia (por ejemplo, un `wordId` que ya no existe).
-- **Esperado:** Nada se aplica: ni el incremento de stats, ni el borrado del invitado, ni la eliminación de la cookie. El jugador puede reintentar.
-- **Comportamiento actual:** Los pasos no están envueltos en `$transaction`; un fallo parcial deja las stats ya incrementadas.
+- **Esperado:** Un fallo a mitad de camino no aplica nada; migraciones concurrentes (dos pestañas) ocurren una sola vez.
+- **Cubierto:** concurrencia (`SELECT ... FOR UPDATE`) y fallo inyectado con un trigger de Postgres que aborta el borrado del invitado: la cuenta queda sin progreso ni puntos, el invitado intacto y la cookie sigue para reintentar.
+
+---
+
+### SYNC-09 — El nombre de fantasía del invitado se conserva al entrar con Google
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `fixes.int.test.ts`
+
+- **Precondición:** Invitado con `username: 'ZorroAzul'` (INI-01); cuenta de Google sin `username`.
+- **Esperado:** Tras la migración, la cuenta queda con `username: 'ZorroAzul'`. Si la cuenta ya tenía alias, se conserva el de la cuenta.
+- **Corregido el 2026-11-16 (ciclos de prueba):** `migrateGuestProgress` copia el alias después de borrar al invitado (dentro de la misma transacción).
+
+---
+
+### SYNC-10 — Después de migrar no se vuelve a pedir el nombre
+**Tipo:** `int` + `unit` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `fixes.int.test.ts`, `AuthSync.test.tsx`, `Modals.test.tsx`
+
+- **Contexto:** al volver del login, la home se renderiza **antes** de que `AuthSync` migre, con `needsUsername: true`. Con SYNC-09 y USER-02 juntos, el modal quedaba abierto y cualquier nombre nuevo era rechazado: el modal no se podía cerrar (detectado en el ciclo 3).
+- **Esperado:** tras migrar, `AuthSync` actualiza la sesión y pide de nuevo la página (`router.refresh`), y el juego se reinicia con el estado nuevo. Si igual llega un `updateUsername` tardío, responde `alreadySet: true` y el modal se cierra.
 
 ---
 
 ## RANK — Rankings
 
 ### RANK-01 — El ranking global excluye invitados
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ (con mocks)
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `identity.int.test.ts`, `onboarding.int.test.ts`
 
-- Cubierto: `getGlobalRanking should filter out users without email (guests)`. Conviene reescribirlo como `int`.
+- **Esperado:** Solo usuarios con `email` (Google), aunque un invitado tenga alias y más puntos.
 
 ---
 
 ### RANK-02 — El ranking global ordena por puntos, tiempo y neuronas
-**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ❌
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`
 
-- **Precondición:** 4 usuarios con combinaciones que ejerciten los tres criterios, incluidos empates.
-- **Esperado:** Orden `points desc`, luego `totalTime asc`, luego `neuronas desc`.
-
----
-
-### RANK-03 — El ranking por nivel devuelve el top real 🔴
-**Tipo:** `int` · **Prioridad:** P1 · **Ref:** B-7
-
-- **Precondición:** 25 usuarios con progreso en el nivel 1. El usuario `campeon` tiene 40 palabras resueltas; el resto entre 1 y 5.
-- **Pasos:** Invocar `getLevelRanking(1, 10)`.
-- **Esperado:** `campeon` está en el primer puesto.
-- **Comportamiento actual:** `take: 10` se aplica **antes** de ordenar, y el orden se hace en JS sobre esos 10. Postgres sin `ORDER BY` no garantiza orden: se toman 10 usuarios arbitrarios. Con 25 usuarios, `campeon` tiene ~60 % de probabilidad de ni aparecer.
-- **Nota:** el test debe correr con un dataset > `limit`; con 10 o menos usuarios el defecto es invisible.
+- **Esperado:** `points desc`, luego `totalTime asc`, luego `neuronas desc`.
 
 ---
 
-### RANK-04 — El ranking por nivel solo cuenta palabras adivinadas
-**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ❌
+### RANK-03 — El ranking por nivel devuelve el top real
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Ref:** B-7 · **Tests:** `fixes.int.test.ts`
 
-- **Precondición:** Usuario con 3 `guessed` y 5 `skipped` en el nivel 1.
-- **Esperado:** `levelPoints === 3`. Las saltadas no suman.
+- **Precondición:** 25 usuarios con progreso en el nivel 1; `campeon` tiene más palabras que el resto y se crea último.
+- **Esperado:** `getLevelRanking(1, 10)` devuelve 10 filas con `campeon` primero y sin `id`.
+- **Corregido el 2026-11-16 (ciclos de prueba):** una consulta SQL agrupa, ordena (`levelPoints desc, levelTime asc`) y limita en la base; el límite se acota a 1..50.
+
+---
+
+### RANK-04 — El ranking por nivel cuenta solo aciertos
+**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`
 
 ---
 
 ### RANK-05 — Ranking vacío
-**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ❌
+**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `RankingBoard.test.tsx`
 
-- **Esperado:** El componente muestra "NO HAY DATOS EN ESTE SECTOR" sin errores de consola.
+- **Esperado:** "NO HAY DATOS EN ESTE SECTOR", sin errores.
 
 ---
 
-### RANK-06 — El ranking no rompe con datos incompletos
-**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ❌
+### RANK-06 — El ranking no se rompe con datos incompletos
+**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `RankingBoard.test.tsx`
 
-- **Precondición:** Usuarios con `username: null`, `name: null` e `image: null`.
-- **Esperado:** Se muestra "Anónimo" y el ícono por defecto. Sin excepciones.
-- **Nota:** `RankingBoard` usa `useState<any[]>`, así que TypeScript no protege este camino.
+- **Esperado:** Con `username`, `name` e `image` nulos muestra "Anónimo" y el ícono por defecto.
+
+---
+
+### RANK-07 — Una fila sin tiempo no muestra NaN
+**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `RankingBoard.test.tsx`
+
+- **Esperado:** Si a una fila le falta `totalTime`/`levelTime`, se muestra `0:00`. Detectado al tipar `RankingBoard` en el ciclo 2.
 
 ---
 
 ## USER — Alias
 
-### USER-01 — El servidor valida el formato del alias 🔴
-**Tipo:** `int` · **Prioridad:** P1 · **Ref:** S-6
+### USER-01 — El servidor valida el formato del alias
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Ref:** S-6 · **Tests:** `fixes.int.test.ts`
 
-- **Pasos:** Invocar `updateUsername()` directamente (sin pasar por el modal) con: `'ab'` (corto), `'a'.repeat(500)`, `'<script>alert(1)</script>'`, `'nombre con espacios'`, `''`, `'admin '`.
-- **Esperado:** Todos rechazados. Solo se acepta `[a-zA-Z0-9_]{3,15}`.
-- **Comportamiento actual:** Todos se aceptan y persisten. La única validación vive en el `onChange` del modal, y una Server Action es un endpoint HTTP público.
-
----
-
-### USER-02 — El alias no se puede cambiar una vez establecido 🔴
-**Tipo:** `int` · **Prioridad:** P1 · **Ref:** S-6
-
-- **Precondición:** `usuario.username = 'Matetero'`.
-- **Pasos:** Invocar `updateUsername('OtroNombre')`.
-- **Esperado:** `{ success: false }`. El alias es la identidad en el ranking.
-- **Comportamiento actual:** Se cambia sin restricción, tantas veces como se quiera.
+- **Pasos:** Invocar `updateUsername()` directamente con `'ab'`, `'a'.repeat(500)`, `'<script>alert(1)</script>'`, `'nombre con espacios'`, `''`, `'admin '`.
+- **Esperado:** Todos rechazados; solo `[a-zA-Z0-9_]{3,15}` (`src/lib/username.ts`). `checkUsername` tampoco da por disponible un formato inválido.
 
 ---
 
-### USER-03 — Alias duplicado devuelve un error específico 🔴
-**Tipo:** `int` · **Prioridad:** P2 · **Ref:** S-6
+### USER-02 — El alias no se puede cambiar una vez establecido
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Ref:** S-6 · **Tests:** `fixes.int.test.ts`
 
-- **Precondición:** Ya existe `'Matetero'`.
-- **Esperado:** Error distinguible de un fallo de base — el código `P2002` de Prisma debe mapearse a un mensaje propio.
-- **Comportamiento actual:** El `catch` genérico devuelve `'Error updating username'` tanto para un alias tomado como para una caída de Postgres.
+- **Esperado:** Con alias ya definido, `updateUsername('Otro')` → `{ success: false, alreadySet: true }`. Se implementa con un `UPDATE ... WHERE username IS NULL`, así que dos pestañas no pueden pisarse.
 
 ---
 
-### USER-04 — Carrera entre dos usuarios por el mismo alias
-**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ❌
+### USER-03 — Alias duplicado devuelve un error específico
+**Tipo:** `int` + `unit` · **Prioridad:** P2 · **Estado:** ✅ · **Ref:** S-6 · **Tests:** `fixes.int.test.ts`, `Modals.test.tsx`
 
-- **Pasos:** Dos usuarios invocan `updateUsername('Mismo')` en paralelo.
-- **Esperado:** Uno tiene éxito, el otro recibe el error de duplicado. El unique de la base debe sostenerlo aunque `checkUsername` haya dicho "disponible" a ambos.
+- **Esperado:** `P2002` → "Ese nombre ya está en uso.", distinto de un fallo de base; el modal muestra ese texto.
 
 ---
 
-### USER-05 — Un usuario sin alias ve el modal
-**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ❌
+### USER-04 — Dos jugadores piden el mismo alias a la vez
+**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`
 
-- **Esperado:** `getInitialGameState()` devuelve `needsUsername: true` para un autenticado sin `username`, y `false` una vez seteado.
+- **Esperado:** Uno lo obtiene; el unique de la base impide el duplicado aunque `checkUsername` haya dicho "disponible" a ambos. (El mensaje del perdedor es USER-03.)
+
+---
+
+### USER-05 — `needsUsername` refleja si falta el alias
+**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `catalog.int.test.ts`, `onboarding.int.test.ts`
+
+- **Esperado:** `true` para invitados y registrados sin alias (salvo en la primera visita, cuando todavía no existe el invitado); `false` con alias.
 
 ---
 
 ### USER-06 — El modal de alias envía y cierra
-**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ✅
-
-- Cubierto: `UsernameModal should render and handle submission`.
+**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `Modals.test.tsx`, `GameEngine.test.tsx`
 
 ---
 
-### USER-07 — `checkUsername` con rate limiting
-**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ❌ · **Ref:** S-7
+### USER-07 — `checkUsername` con límite de uso
+**Tipo:** `int` + `unit` · **Prioridad:** P2 · **Estado:** ✅ · **Ref:** S-7 · **Tests:** `fixes.int.test.ts`, `Modals.test.tsx`
 
-- **Pasos:** 200 invocaciones seguidas desde el mismo origen.
-- **Esperado:** Se aplica algún límite. Hoy es un oráculo de enumeración sin autenticación ni control.
-
----
-
-## DATA — Schema, migraciones y seed
-
-### DATA-01 — Las migraciones reconstruyen el schema actual 🔴
-**Tipo:** `manual` / CI · **Prioridad:** **P0** · **Ref:** B-3
-
-- **Pasos:** Contra una base Postgres vacía:
-  ```bash
-  npx prisma migrate deploy
-  npx prisma migrate diff \
-    --from-schema-datasource prisma/schema.prisma \
-    --to-schema-datamodel prisma/schema.prisma \
-    --exit-code
-  ```
-- **Esperado:** Exit code 0 — sin drift.
-- **Comportamiento actual:** Faltan `User.username` (+ su índice único), `Progress.revealedIndices`, y las tablas `Setting` y `GameMessage`. La base de producción se actualizó con `db push`.
-- **Este check debería correr en CI en cada PR.**
+- **Esperado:** Sin identidad (sin cookie ni sesión) responde `error: 'no_identity'`. Con identidad, 30 consultas por minuto por jugador; después `error: 'rate_limited'` y el modal muestra "Demasiadas consultas. Esperá un minuto."
+- **Límite conocido:** el contador vive en memoria del proceso; con varios procesos el tope es por proceso.
 
 ---
 
-### DATA-02 — La app arranca sobre una base recién migrada 🔴
-**Tipo:** `int` · **Prioridad:** **P0** · **Ref:** B-3
+## DATA — Schema, migraciones y datos
 
-- **Pasos:** Base vacía → `migrate deploy` → seed → `getInitialGameState()`, `getGameSettings()`, `getRandomMessage('success')`.
-- **Esperado:** Las tres responden sin error.
-- **Comportamiento actual:** Fallan por las tablas faltantes de DATA-01.
+### DATA-01 — Las migraciones reconstruyen el schema
+**Tipo:** `manual` · **Prioridad:** **P0** · **Estado:** ✅ · **Ref:** B-3
 
----
-
-### DATA-03 — Borrar un usuario borra su progreso 🔴
-**Tipo:** `int` · **Prioridad:** P1 · **Ref:** B-1
-
-- **Pasos:** Crear un usuario con filas de `Progress`, invocar `prisma.user.delete`.
-- **Esperado:** Se borra en cascada, sin error de FK.
-- **Comportamiento actual:** P2003. Es la causa raíz de SYNC-01.
+- **Comando:** `prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --script` (con `SHADOW_DATABASE_URL` local).
+- **Resultado 2026-11-15:** `-- This is an empty migration.` También contra producción en solo lectura (001, research R6).
+- **Pendiente:** correrlo en CI en cada PR (INFRA-04).
 
 ---
 
-### DATA-04 — El valor inicial de neuronas es consistente
-**Tipo:** `manual` · **Prioridad:** P2 · **Estado:** ❌ · **Ref:** B-3
+### DATA-02 — La app arranca sobre una base recién migrada
+**Tipo:** `int` + `manual` · **Prioridad:** **P0** · **Estado:** ✅ · **Ref:** B-3
 
-- **Verificar:** hoy hay **tres** valores distintos — `schema.prisma` dice `50`, la migración `init` dice `150`, y `auth.ts` usa `?? 150` como fallback.
-- **Esperado:** Un solo valor, definido en el schema.
+- **Esperado:** Base vacía → `migrate deploy` → carga de niveles y seed → la home funciona. Verificado a mano (37 niveles, 486 palabras; 001 quickstart §1) y en cada corrida de `npm run test:integration`, que aplica las migraciones antes de los tests.
+
+---
+
+### DATA-03 — Borrar un usuario con progreso
+**Tipo:** `int` · **Prioridad:** P1 · **Estado:** ✅ · **Ref:** B-1 · **Tests:** `catalog.int.test.ts`
+
+- **Decisión (001):** `Progress → User` sigue en `RESTRICT`, sin cascada: borrar un usuario exige borrar antes su progreso de forma explícita, lo que evita perder progreso por accidente. La migración de invitados lo hace dentro de su transacción (SYNC-01). Las tablas sociales sí borran en cascada.
+- **Esperado:** Borrar directo falla; borrando antes el progreso, funciona.
+
+---
+
+### DATA-04 — Saldo inicial de neuronas consistente
+**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ✅ · **Ref:** B-3 · **Tests:** `catalog.int.test.ts`
+
+- **Esperado:** 50 en el schema, en el default de la base (migración `sync_schema`) y en el respaldo de `auth.ts` (AUTH-08).
 
 ---
 
 ### DATA-05 — El seed es idempotente
-**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ❌
+**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ✅ · **Tests:** `fixes.int.test.ts`
 
-- **Pasos:** Ejecutar `scripts/seed-db.ts` dos veces.
-- **Esperado:** El conteo de `GameMessage` es el mismo tras la segunda corrida (hoy hace `DELETE` previo, así que debería cumplirse — confirmarlo), y `Setting` no duplica filas.
+- **Pasos:** Ejecutar `seed()` de `scripts/seed-db.ts` dos veces sobre la base `_test`.
+- **Esperado:** Mismos conteos de `GameMessage`; no pisa un `costo_pista` ya configurado; crea `costo_salto = 15` si falta. Todo en una transacción.
+- **Nota:** el script ya no carga `dotenv/config` (el `.env` local apunta a producción): se corre con `npx dotenv -e .env.test -- npx tsx scripts/seed-db.ts`.
 
 ---
 
 ### DATA-06 — Las listas de mensajes no divergen
-**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ❌ · **Ref:** C-7
+**Tipo:** `int` · **Prioridad:** P2 · **Estado:** ✅ · **Ref:** C-7 · **Tests:** `fixes.int.test.ts`
 
-- **Esperado:** Las listas de `scripts/seed-db.ts` coinciden con las de `src/lib/messages.ts`.
-- **Nota:** hoy están **copiadas** en ambos archivos. La mejor corrección es que el seed importe de `src/lib/messages.ts`, con lo cual este caso deja de hacer falta.
+- **Esperado:** El seed carga exactamente los mensajes de `src/lib/messages.ts`, que ahora importa en lugar de copiarlos.
+
+---
+
+### DATA-07 — Reparación del puntaje inflado
+**Tipo:** `int` · **Prioridad:** **P0** · **Estado:** ✅ · **Ref:** S-3 · **Tests:** `recalculate-points.int.test.ts`
+
+- **Esperado:** `scripts/recalculate-points.ts` en modo informe no escribe nada; con `--apply` crea `User_backup_20261115` y deja `points = aciertos` y `totalTime = suma de tiempos`, sin tocar neuronas (decisión de 001). No se aplica dos veces.
+- **Pendiente:** ejecutarlo en producción, con confirmación del dueño (001 quickstart §5).
 
 ---
 
 ## UI — Interacción del cliente
 
-Área con buena cobertura. Los casos cubiertos se listan de forma condensada para poder rastrearlos por ID.
-
-| ID | Caso | Estado |
-|---|---|---|
-| UI-01 | Renderiza la descripción y el nivel inicial | ✅ |
-| UI-02 | Escribir con el teclado llena las casillas | ✅ |
-| UI-03 | Acierto muestra estado de éxito y botón "SIGUIENTE" | ✅ |
-| UI-04 | "SIGUIENTE" pide una palabra nueva | ✅ |
-| UI-05 | Backspace borra y retrocede el cursor | ✅ |
-| UI-06 | Backspace con la palabra llena borra la última letra | ✅ |
-| UI-07 | "Limpiar" resetea el cursor a la primera posición editable | ✅ |
-| UI-08 | "Limpiar" borra todas las letras no reveladas | ✅ |
-| UI-09 | Comprar letra descuenta neuronas en pantalla | ✅ |
-| UI-10 | Saltar descuenta neuronas en pantalla | ✅ |
-| UI-11 | Enter tras un acierto pasa a la palabra siguiente | ✅ |
-| UI-12 | Alterna entre modo pool y modo teclado | ✅ |
-| UI-13 | El botón de sonido activa y desactiva | ✅ |
-| UI-14 | El modal de instrucciones abre y cierra | ✅ |
-
-### UI-15 — Las letras reveladas por pista no son editables
-**Tipo:** `unit` · **Prioridad:** P1 · **Estado:** ❌
-
-- **Precondición:** `initialRevealedIndices: [1, 3]`.
-- **Pasos:** Intentar escribir sobre esas posiciones, hacer backspace hasta pasarlas, clickear la casilla, y usar "Limpiar".
-- **Esperado:** El contenido de las posiciones 1 y 3 nunca cambia, y el cursor las saltea en ambas direcciones.
-- **Nota:** la lógica de `getValidCursor` es de las más delicadas del componente y solo está cubierta indirectamente.
-
----
+| ID | Caso | Estado | Test |
+|---|---|---|---|
+| UI-01 | Renderiza la definición y el nivel inicial | ✅ | `GameEngine.test.tsx` |
+| UI-02 | Escribir con el teclado llena las casillas | ✅ | `GameEngine.test.tsx` |
+| UI-03 | Acierto muestra estado de éxito y "SIGUIENTE" | ✅ | `GameEngine.test.tsx` |
+| UI-04 | "SIGUIENTE" pide una palabra nueva | ✅ | `GameEngine.test.tsx` |
+| UI-05 | Backspace borra la última letra escrita | ✅ | `GameEngine.test.tsx` |
+| UI-06 | Backspace con la palabra llena borra la última letra | ✅ | `GameEngine.test.tsx` |
+| UI-07 | "Limpiar" vuelve el cursor a la primera posición editable | ✅ | `GameEngine.test.tsx` |
+| UI-08 | "Limpiar" borra todas las letras no reveladas | ✅ | `GameEngine.test.tsx` |
+| UI-09 | Comprar letra descuenta neuronas y muestra la letra | ✅ | `GameEngine.test.tsx` |
+| UI-10 | Saltar descuenta neuronas en pantalla | ✅ | `GameEngine.test.tsx` |
+| UI-11 | Enter tras un acierto pasa a la palabra siguiente | ✅ | `GameEngine.test.tsx` |
+| UI-12 | Alterna entre modo pool y modo teclado | ✅ | `GameEngine.test.tsx` |
+| UI-13 | El botón de sonido activa y desactiva | ✅ | `GameEngine.test.tsx` |
+| UI-14 | El modal de instrucciones abre y cierra | ✅ | `Modals.test.tsx` |
+| UI-15 | Las letras reveladas no se editan (cursor, backspace, click, limpiar) | ✅ | `GameEngine.test.tsx` |
+| UI-16 | La detección de móvil no rompe el render en servidor | ✅ | `GameEngine.test.tsx` |
+| UI-17 | Un intento incorrecto muestra el mensaje de error y no avanza | ✅ | `GameEngine.test.tsx` |
+| UI-18 | El pool de 14 letras lo envía el servidor | ✅ | `GameEngine.test.tsx` |
+| UI-19 | Backspace repetido con el teclado físico | ✅ | `GameEngine.test.tsx` |
+| UI-21 | Las neuronas de una sesión ya cargada al montar se muestran | ✅ | `GameEngine.test.tsx` |
+| UI-22 | El modal de instrucciones respeta `isOpen` | ✅ | `Modals.test.tsx` |
 
 ### UI-16 — La detección de móvil no rompe el render en servidor
-**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ❌ · **Ref:** B-9
+**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ✅ · **Ref:** B-9
 
-- **Pasos:** Renderizar `GameEngine` en un entorno sin `navigator` global.
-- **Esperado:** No lanza `ReferenceError`.
-- **Comportamiento actual:** `navigator.userAgent` se lee durante el render, y Next pre-renderiza los componentes cliente en el servidor.
+- **Esperado:** `renderToString(<GameEngine />)` sin `navigator` global no lanza.
+- **Corregido el 2026-11-16 (ciclos de prueba):** `useSyncExternalStore` con valor de servidor `false`. La primera corrección (ciclo 1, `setState` dentro de un efecto) la marcó el lint en el ciclo 2 y se rehízo.
+
+### UI-19 — Backspace repetido con el teclado físico
+**Tipo:** `unit` · **Prioridad:** P1 · **Estado:** ✅
+
+- **Pasos:** Con el teclado físico, escribir `PLA` y apretar Backspace dos veces; después escribir `X`.
+- **Esperado:** Queda `P`, y la `X` va a la segunda casilla.
+- **Corregido el 2026-11-16 (ciclos de prueba):** el handler de `window` calcula el próximo estado desde una referencia y aplica `setUserInput` y `setCursorPos` por separado (antes había un `setState` dentro del updater de otro). Los handlers de Enter también se leen por referencia, para usar siempre la versión vigente. Conviene confirmarlo en un navegador.
+
+### UI-21 — Las neuronas de una sesión ya cargada al montar se muestran
+**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ✅
+
+- **Esperado:** Si al montar `useSession` ya trae `neuronas: 77`, el contador muestra 77 aunque el servidor haya pasado 50. Regresión introducida y corregida dentro de los ciclos (ciclo 2 → ciclo 3).
+
+### UI-22 — El modal de instrucciones respeta `isOpen`
+**Tipo:** `unit` · **Prioridad:** P2 · **Estado:** ✅
+
+- **Esperado:** Con `isOpen={false}` no renderiza nada (antes la prop se ignoraba).
 
 ---
 
-## INFRA — Dependencias y build
+## INFRA — Dependencias, build y repositorio
 
-### INFRA-01 — Sin vulnerabilidades altas o críticas 🔴
-**Tipo:** CI · **Prioridad:** **P0** · **Ref:** S-9
+### INFRA-01 — Sin vulnerabilidades altas o críticas
+**Tipo:** CI · **Prioridad:** **P0** · **Estado:** ✅ · **Ref:** S-9
 
-- **Comando:** `npm audit --audit-level=high`
-- **Esperado:** Exit code 0.
-- **Estado actual:** 26 vulnerabilidades (3 críticas, 17 altas). `next-auth@4.24.13` tiene una crítica que afecta el flujo de OAuth de esta app; `next@16.1.7` arrastra 23 advisories, corregidas en 16.2.11.
+- **Comando:** `npm audit --audit-level=high` → exit 0.
+- **2026-11-16:** `npm audit fix` (sin `--force`) llevó `next` a 16.4.6 y `next-auth` a 4.24.15. Quedan 7 moderadas, todas en herramientas de lint (`minimatch` dentro de `eslint`/`typescript-eslint`), que no llegan a producción.
 
 ---
 
-### INFRA-02 — El typecheck pasa limpio 🔴
-**Tipo:** CI · **Prioridad:** P1 · **Ref:** C-2
+### INFRA-02 — El typecheck pasa limpio
+**Tipo:** `manual` · **Prioridad:** P1 · **Estado:** ✅ · **Ref:** C-2
 
-- **Comando:** `npx tsc --noEmit`
-- **Estado actual:** 1 error en `src/app/actions/sync.test.ts:56` (tipo del mock de `findUnique`).
+- **Comando:** `npx tsc --noEmit` → exit 0 (2026-11-15). Pendiente: correrlo en CI.
 
 ---
 
 ### INFRA-03 — El lint corre
-**Tipo:** CI · **Prioridad:** P1 · **Estado:** ❌ · **Ref:** C-1
+**Tipo:** CI · **Prioridad:** P1 · **Estado:** ✅ · **Ref:** C-1
 
-- **Comando:** `npm run lint`
-- **Estado actual:** roto. `next lint` fue removido en Next 16 y no hay configuración de ESLint en el repositorio.
+- **Comando:** `npm run lint` (ahora `eslint .` con `eslint.config.mjs` y `eslint-config-next`) → 0 errores, 0 warnings.
+- **2026-11-16:** al habilitarlo aparecieron 36 errores (hooks, `setState` en efectos, refs en el render, `any`) que se corrigieron en el ciclo 2, y 28 warnings que se limpiaron en el ciclo 3.
 
 ---
 
 ### INFRA-04 — El build de producción funciona
-**Tipo:** CI · **Prioridad:** P1 · **Estado:** ❌
+**Tipo:** `manual` · **Prioridad:** P1 · **Estado:** ✅
 
-- **Comando:** `npm run build`
-- **Esperado:** Exit code 0. Verificar que `prisma generate` corre antes del build de Next, como está definido en el script.
+- **Comando:** `npm run build` (`prisma generate` + `next build`) → exit 0 el 2026-11-15, con `/`, `/desafio/[code]`, `/desafios` y `/admin/comentarios` dinámicas. Pendiente: CI que corra build, typecheck, tests y DATA-01 en cada PR.
 
 ---
 
 ### INFRA-05 — No hay secretos versionados
-**Tipo:** CI · **Prioridad:** P1 · **Estado:** ❌ · **Ref:** S-8
+**Tipo:** `unit` · **Prioridad:** **P0** · **Estado:** ✅ · **Ref:** S-8 · **Tests:** `src/test/infra.test.ts`
 
-- **Verificar:** `git ls-files` no devuelve `.env`, `*.keystore`, `*.db` ni `*.sqlite`.
-- **Estado actual:** `.env` está correctamente ignorado y nunca fue commiteado ✅, pero sí están versionados los dos keystores de firma de Android, `prisma/dev.db` y cinco `.sqlite` del proyecto legacy.
-
----
-
-## Anexo A — Infraestructura necesaria
-
-31 de los 86 casos son de tipo `int` y necesitan una Postgres real. Es la inversión que más cobertura desbloquea: **los 24 casos marcados 🔴 son en su mayoría indetectables con Prisma mockeado**, porque lo que falla son restricciones de la base (claves foráneas, unique, atomicidad) que un mock no modela.
-
-Setup sugerido:
-
-```yaml
-# docker-compose.test.yml
-services:
-  db:
-    image: postgres:17-alpine
-    environment:
-      POSTGRES_PASSWORD: test
-      POSTGRES_DB: matete_test
-    ports: ['5433:5432']
-```
-
-```jsonc
-// package.json
-"scripts": {
-  "test:int": "DATABASE_URL=postgresql://postgres:test@localhost:5433/matete_test vitest run --config vitest.int.config.ts"
-}
-```
-
-Con un `beforeEach` que trunque las tablas y siembre el mínimo necesario. Alternativa sin Docker: [Testcontainers](https://node.testcontainers.org/), que levanta y descarta el contenedor desde el propio test.
+- **Verificar:** `git ls-files` no devuelve `.env*`, `*.keystore`, `*.jks`, `*.db` ni `*.sqlite`.
+- **2026-11-16:** se sacaron del índice los 2 keystores, `prisma/dev.db`, los `.sqlite` y los `Thumbs.db` (siguen en disco) y se agregaron a `.gitignore`. El cambio se aplica al hacer commit.
+- **A cargo del dueño:** los keystores **ya se publicaron** y siguen en el historial del repo público. Hay que considerarlos comprometidos: rotarlos y, si se decide, purgar el historial (requiere force-push).
 
 ---
 
-## Anexo C — Verificado contra producción (2026-08-06)
+### INFRA-06 — La documentación interna de infraestructura no se publica
+**Tipo:** `unit` · **Prioridad:** **P0** · **Estado:** ✅ · **Tests:** `src/test/infra.test.ts`
 
-Consultas de solo lectura contra la base real. Los casos 🔴 dejaron de ser hipótesis derivadas del código: están confirmados, y varios ya causaron daño en los datos.
-
-| Caso | Confirmación |
-|---|---|
-| `DATA-01` | La base tiene `username`, `revealedIndices`, `Setting` y `GameMessage`; `_prisma_migrations` solo registra las 2 migraciones del repo, que no los contienen. El drift es real y total. |
-| `DATA-03` / `SYNC-01` | `Progress_userId_fkey` es `RESTRICT`. **35 invitados tienen progreso** — cada uno rompe la migración al loguearse. |
-| `GAME-03` / `SYNC-02` | **364 puntos fantasma sobre 949** (38 %). Caso extremo: 349 puntos y 2.420 neuronas contra 21 palabras adivinadas. |
-| `HINT-09` | Los costos de `Level` son datos configurados a propósito (35/25/30 en 32 niveles) que el código ignora por completo. |
-| `HINT-04` | Sin explotar: ningún saldo negativo. El defecto sigue latente. |
-| `GAME-05` | Sin explotar: ningún `timeTaken` en 0 entre 585 adivinadas. |
-| `USER-01` | Sin explotar: los 22 alias cumplen el formato. |
-| `GAME-08` / `PROG-04` | No alcanzables hoy: todos los niveles tienen palabras y nadie supera el nivel 37. Los defectos siguen en el código. |
-
-### Ajustes al catálogo que surgen de los datos
-
-**`GAME-11` — el escenario de 50 palabras no existe.** En producción los niveles tienen entre **5 y 34 palabras** (promedio 13,1); el nivel 1, donde está el 73 % de los usuarios, tiene **9**. Los tests de progresión deberían parametrizarse por tamaño de nivel y cubrir al menos un nivel corto (5) y uno largo (34), en vez de un 50 fijo que nadie atraviesa.
-
-**`RANK-01` — el ranking excluye al 94 % de los usuarios.** Solo 3 de 49 tienen `email`. Pero el modal de alias se le muestra también a los invitados: 22 eligieron alias y 19 nunca podrán figurar. Agregar un caso que fije la decisión de producto, cualquiera sea:
-
-### DATA-07 — Reparación del puntaje inflado
-**Tipo:** `int` · **Prioridad:** **P0** · **Estado:** ❌ · **Ref:** S-3
-
-- **Precondición:** Corregida la idempotencia de `recordWordSolved` (GAME-03).
-- **Pasos:** Ejecutar el script de reparación que recalcula `points` como el conteo real de `Progress.guessed` por usuario.
-- **Esperado:** `sum(points) === count(Progress WHERE guessed)`. Definir aparte qué hacer con las neuronas infladas: recalcularlas rompe saldos que los jugadores ya creen tener.
-- **Nota:** corregir el código no repara los datos existentes. Son dos tareas distintas y esta es la que el jugador va a notar.
-
----
-
-## Anexo B — Orden de ataque sugerido
-
-Los casos 🔴 escritos **antes** de la corrección sirven como verificación de que el arreglo es real. Este orden agrupa los que se resuelven con el mismo cambio:
-
-| Paso | Casos | Corrección asociada |
-|---|---|---|
-| 1 | `DATA-01`, `DATA-02` | Generar la migración faltante |
-| 2 | `DATA-03`, `SYNC-01`, `SYNC-02`, `SYNC-03`, `SYNC-08` | Arreglar `migrateGuestProgress` + cascada en `Progress` |
-| 3 | `AUTH-02`, `AUTH-03`, `AUTH-04` | Firmar la cookie de invitado y dejar de exponer `id` |
-| 4 | `INFRA-01` | `npm audit fix` |
-| 5 | `GAME-03`, `GAME-04`, `GAME-07` | Idempotencia de `recordWordSolved` |
-| 6 | `GAME-01`, `GAME-02`, `GAME-05` | Mover la validación al servidor |
-| 7 | `RANK-03` | Agregación en la base para el ranking por nivel |
-| 8 | `HINT-04`, `USER-01`, `USER-02`, `USER-03` | Descuento atómico y validación de alias |
-| 9 | `GAME-08`, `HINT-10`, `UI-16`, `PROG-04`, `PROG-08` | Robustez |
-| 10 | `INFRA-02`, `INFRA-03`, `INFRA-04`, `INFRA-05` | Gates de CI |
-
-El paso 2 solo se puede verificar de verdad con la infraestructura del Anexo A, así que conviene montarla junto con el paso 1.
+- **Verificar:** `CODE_REVIEW.md` no está en `git ls-files` y `git check-ignore` lo reconoce.
+- **2026-11-16:** agregado a `.gitignore`.
 
 ---
 
 ## SOC — Funciones sociales (feature 002-social)
 
-Agregado el 2026-11-15. Todos ✅: cubiertos por tests que pasan. Spec: [specs/002-social/spec.md](../specs/002-social/spec.md).
+Spec: [specs/002-social/spec.md](../specs/002-social/spec.md). Todos ✅.
 
-| ID | Caso | Tipo | Ref | Archivo |
+| ID | Caso | Tipo | Ref | Test |
 |---|---|---|---|---|
 | SOC-01 | El texto compartido tiene nivel, casilleros, tiempo, pistas y link, sin la palabra | `unit` | FR-002 | `src/lib/share.test.ts` |
 | SOC-02 | `submitGuess` devuelve el tiempo y las letras reveladas que registró el servidor | `int` | FR-003 | `share-result.int.test.ts` |
-| SOC-03 | El panel social aparece solo tras acertar; Enter dentro del panel no pasa de palabra | `unit` | FR-001 | `GameEngine.test.tsx` |
+| SOC-03 | El panel social aparece solo tras acertar (también para invitados); Enter dentro del panel no pasa de palabra | `unit` | FR-001, FR-004 | `GameEngine.test.tsx` |
 | SOC-04 | Compartir: menú nativo → portapapeles; cancelar no copia | `unit` | FR-001 | `ShareButton.test.tsx` |
 | SOC-10 | Normalización del comentario (vacío, 280, saltos, control, HTML literal) | `unit` | FR-007 | `src/lib/comment-text.test.ts` |
-| SOC-11 | Comentarios bloqueados (ni cantidad) sin acierto, salteada u otra palabra; paginación | `int` | FR-005, FR-009 | `comments.int.test.ts` |
-| SOC-12 | Publicar exige Google + username + acierto; cuerpo inválido rechazado | `int` | FR-006, FR-007 | `comments.int.test.ts` |
-| SOC-13 | Rate limit: simultáneos → uno; 30 s; 20 por día | `int` | FR-008 | `comments.int.test.ts` |
+| SOC-11 | Comentarios bloqueados (ni la cantidad) sin acierto, con salteo u otra palabra; paginación | `int` | FR-005, FR-009 | `comments.int.test.ts` |
+| SOC-12 | Publicar exige Google + alias + acierto; cuerpo inválido rechazado | `int` | FR-006, FR-007 | `comments.int.test.ts` |
+| SOC-13 | Límite: simultáneos → uno; 30 s; 20 por día | `int` | FR-008 | `comments.int.test.ts` |
 | SOC-14 | Reporte único por jugador; 3 distintos (simultáneos) ocultan | `int` | FR-010 | `comments.int.test.ts` |
 | SOC-15 | Restaurar exige 3 reportes nuevos | `int` | FR-013 | `comments.int.test.ts` |
 | SOC-16 | Borrado por el autor; moderación solo para admin | `int` | FR-011, FR-012 | `comments.int.test.ts` |
 | SOC-17 | UI de comentarios: invitación, publicar, errores, HTML como texto, reportar/borrar, "ver más" | `unit` | FR-009 | `CommentsPanel.test.tsx` |
-| SOC-20 | Seguir idempotente; rechazos (self, inexistente, invitado, sin username); tope 500 concurrente | `int` | FR-014, FR-015 | `follows.int.test.ts` |
+| SOC-25 | Al cambiar de palabra se descarta la respuesta de comentarios de la palabra anterior | `unit` | FR-005 | `CommentsPanel.test.tsx` |
+| SOC-20 | Seguir idempotente; rechazos (self, inexistente, invitado, sin alias); tope 500 concurrente | `int` | FR-014, FR-015 | `follows.int.test.ts` |
 | SOC-21 | Búsqueda por prefijo con `%`/`_` literales | `int` | FR-016 | `follows.int.test.ts` |
 | SOC-22 | Ranking de amigos; `isMe`/`isFollowed` en rankings, sin `id` | `int` | FR-017..FR-019 | `follows.int.test.ts` |
+| SOC-23 | UI del ranking: Seguir solo con sesión y en otros con alias; pestaña Amigos (invitación o lista con fila propia) | `unit` | FR-017, FR-018 | `RankingBoard.test.tsx` |
 | SOC-30 | Código de desafío aleatorio y validación de formato | `unit` | FR-021 | `src/lib/challenge-code.test.ts` |
 | SOC-31 | Crear desafío: idempotente (también concurrente), solo palabra acertada, tope 20/día | `int` | FR-020, FR-021 | `challenges.int.test.ts` |
 | SOC-32 | Página pública sin definición, solución ni ids; estados del visitante | `int` | FR-022, FR-023 | `challenges.int.test.ts` |
@@ -846,4 +779,49 @@ Agregado el 2026-11-15. Todos ✅: cubiertos por tests que pasan. Spec: [specs/0
 | SOC-36 | Mis desafíos (creados y jugados), sin ids | `int` | FR-030 | `challenges.int.test.ts` |
 | SOC-37 | UI del desafío: login con regreso, creador, pool + teclado, error, rendirse, terminado | `unit` | FR-023..FR-025 | `ChallengePlay.test.tsx` |
 
-Verificación por mutación (2026-11-15): quitar el chequeo de acierto en `getWordComments` o la condición `"endTime" IS NULL` al cerrar un intento hace fallar SOC-11 y SOC-33 respectivamente.
+Verificación por mutación (2026-11-15): quitar el chequeo de acierto en `getWordComments` o la condición `"endTime" IS NULL` al cerrar un intento hace fallar SOC-11 y SOC-33. En 001, quitar `guessed = false` del acreditado hace fallar GAME-03/GAME-04.
+
+---
+
+## Anexo A — Infraestructura de tests
+
+Implementada en 001 (sin Docker, con el Postgres local de Homebrew):
+
+- `vitest.integration.config.ts`: entorno `node`, archivos `src/test/integration/**/*.int.test.ts`, sin paralelismo entre archivos.
+- `src/test/integration/global-setup.ts`: **aborta si la base no termina en `_test`** y aplica `prisma migrate deploy`.
+- `src/test/integration/setup.ts`: simula `next/headers` (cookies) y `next-auth` (sesión); Prisma es real.
+- `src/test/integration/harness.ts`: cookie jar, `loginAs`, `as(email, fn)`, `newBrowser`, `resetDb` (TRUNCATE + 2 niveles y 5 palabras fijas), `createRegisteredUser`, `createGuestUser`, `createSocialUser`, `solveWord`.
+- `.env.test` (no versionado; ver `.env.test.example`): `DATABASE_URL` y `SHADOW_DATABASE_URL` locales. **El `.env` local apunta a producción**: todo comando contra una base va con `npx dotenv -e .env.test -- …`.
+
+---
+
+## Anexo B — Pendientes (a cargo del dueño)
+
+Los 12 defectos de la v2.0 quedaron corregidos el 2026-11-16. Lo que sigue no se puede resolver desde el código:
+
+| Paso | Casos | Acción |
+|---|---|---|
+| 1 | `INFRA-05` | Rotar los keystores de Android publicados; decidir si se purga el historial del repo |
+| 2 | `AUTH-09`, `UI-19` | Prueba manual en navegador: login con Google (con y sin progreso de invitado, verificando SYNC-09/10) y Backspace con teclado físico |
+| 3 | `HINT-09` | Decidir si se usan los costos por nivel de `Level` |
+| 4 | `INI-01` | Decidir si el modal de alias se puede cerrar y si se pide en la primera visita |
+| 5 | `INFRA-02`, `INFRA-04`, `DATA-01` | CI que corra lint, typecheck, tests, build y el chequeo de migraciones en cada PR |
+| 6 | `DATA-07` | Producción: `pg_dump`, variables de entorno, `migrate resolve`/`deploy`, deploy y recálculo de puntos (ver quickstarts de 001 y 002) |
+
+---
+
+## Anexo C — Verificado contra producción (2026-08-06, histórico)
+
+Consultas de solo lectura de la v1.0. Los defectos que confirmaron ya están corregidos en el código (001); los datos dañados se reparan con DATA-07 al desplegar.
+
+| Caso | Confirmación de agosto | Hoy |
+|---|---|---|
+| `DATA-01` | Drift total: producción armada con `db push` | Baseline `sync_schema`; diff contra producción vacío (2026-11-15). Falta registrarlo en producción |
+| `DATA-03` / `SYNC-01` | 35 invitados con progreso rompían la migración | Corregido (SYNC-01) |
+| `GAME-03` / `SYNC-02` | 364 puntos fantasma sobre 949 (38 %) | Código corregido; datos pendientes de DATA-07 en producción |
+| `HINT-09` | Costos de `Level` configurados (35/25/30) e ignorados | Costo mostrado = cobrado (2026-11-16); usar los de `Level` queda como decisión |
+| `HINT-04` | Sin saldos negativos (defecto latente) | Corregido |
+| `GAME-05` | Sin `timeTaken` en 0 (defecto latente) | Corregido |
+| `USER-01` | Los 22 alias cumplían el formato | Validación en servidor (2026-11-16) |
+| `GAME-08` / `PROG-04` | No alcanzables (nadie supera el nivel 37) | Servidor corregido; UI en PROG-09 |
+| `RANK-01` | Solo 3 de 49 usuarios tenían email; 22 invitados eligieron alias | Regla vigente; ver la observación de INI-01 sobre el texto del modal |

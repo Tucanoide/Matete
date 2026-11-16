@@ -9,7 +9,6 @@ export function normalizeCommentBody(raw: unknown): string | null {
   if (typeof raw !== 'string') return null
   const body = raw
     .replace(/\r\n?/g, '\n')
-    // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u0009\u000B-\u001F\u007F]/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
