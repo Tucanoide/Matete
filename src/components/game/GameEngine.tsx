@@ -65,6 +65,13 @@ export default function GameEngine({
   const [revealedIndices, setRevealedIndices] = useState<number[]>(initialWord.revealed.map(r => r.index));
   const [isPoolMode, setIsPoolMode] = useState(true);
   const [needsUsername, setNeedsUsername] = useState(initialNeedsUsername);
+  // Si el servidor pasa a decir que el alias ya está (p. ej. llegó migrado desde el invitado, SYNC-10),
+  // se cierra el modal. Nunca se abre a mitad de partida: en la primera visita no se pide alias (INI-01).
+  const [prevNeedsUsername, setPrevNeedsUsername] = useState(initialNeedsUsername);
+  if (initialNeedsUsername !== prevNeedsUsername) {
+    setPrevNeedsUsername(initialNeedsUsername);
+    if (!initialNeedsUsername) setNeedsUsername(false);
+  }
   const [showInstructions, setShowInstructions] = useState(false);
   // Local neuronas state — initialized from the server, updated optimistically on spend
   const [neuronas, setNeuronas] = useState(initialNeuronas);

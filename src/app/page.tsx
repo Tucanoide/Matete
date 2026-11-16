@@ -25,8 +25,9 @@ export default async function Home() {
 
         {gameState ? (
           <GameEngine
-            // Si el servidor devuelve otro estado (p. ej. tras migrar el invitado), el juego se reinicia con él.
-            key={`${gameState.word.wordId}:${gameState.levelId}:${gameState.needsUsername}:${gameState.neuronas}`}
+            // Si el servidor devuelve otra palabra, nivel o saldo (p. ej. tras migrar el invitado), el juego
+            // se reinicia con ese estado. needsUsername no va en la key: el juego lo aplica solo para cerrar el modal.
+            key={`${gameState.word.wordId}:${gameState.levelId}:${gameState.neuronas}`}
             initialWord={gameState.word}
             initialLevel={gameState.levelId}
             initialNeedsUsername={gameState.needsUsername}

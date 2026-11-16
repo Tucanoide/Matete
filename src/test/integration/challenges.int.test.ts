@@ -7,6 +7,7 @@ import {
   submitChallengeGuess,
   giveUpChallenge,
   getMyChallenges,
+  getChallengeableWords,
 } from '@/app/actions/challenges'
 import { as, createSocialUser, createRegisteredUser, solveWord, WORDS } from './harness'
 
@@ -227,5 +228,32 @@ describe('[SOC-36] mis desafíos (FR-030)', () => {
     expect(mineBeto.played).toEqual([expect.objectContaining({ code, creator: { username: 'ana', image: null }, result: expect.objectContaining({ solved: true }) })])
     expect(JSON.stringify(mineBeto)).not.toMatch(/"(id|userId|creatorId)"/)
     expect(await as(null, () => getMyChallenges())).toEqual({ ok: false, error: 'login_required' })
+  })
+})
+
+describe('[SOC-38] palabras para crear un desafío desde "Mis desafíos"', () => {
+  it('lista solo las acertadas por el jugador, con su tiempo y si ya tienen desafío', async () => {
+    const ana = await createSocialUser('ana')
+    const beto = await createSocialUser('beto')
+    await solveWord(ana.id, WORDS.L1[0].id, { timeTaken: 42 })
+    await solveWord(ana.id, WORDS.L1[1].id, { timeTaken: 10 })
+    await prisma.progress.create({ data: { userId: ana.id, wordId: WORDS.L1[2].id, skipped: true } })
+    await solveWord(beto.id, WORDS.L2[0].id)
+    await as(ANA, () => createChallenge(WORDS.L1[0].id))
+
+    const r = await as(ANA, () => getChallengeableWords())
+    if (!r.ok) throw new Error(r.error)
+    expect(r.words.map((w) => w.wordId).sort()).toEqual([WORDS.L1[0].id, WORDS.L1[1].id])
+    expect(r.words.find((w) => w.wordId === WORDS.L1[0].id)).toEqual({
+      wordId: WORDS.L1[0].id, word: 'MUDANZA', length: 7, timeTaken: 42, challenged: true,
+    })
+    expect(r.words.find((w) => w.wordId === WORDS.L1[1].id)?.challenged).toBe(false)
+    expect(JSON.stringify(r)).not.toMatch(/userId|"id"/)
+  })
+
+  it('exige Google y alias', async () => {
+    expect(await getChallengeableWords()).toEqual({ ok: false, error: 'login_required' })
+    await createRegisteredUser('sin@example.com')
+    expect(await as('sin@example.com', () => getChallengeableWords())).toEqual({ ok: false, error: 'username_required' })
   })
 })

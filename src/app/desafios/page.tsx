@@ -1,16 +1,17 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Swords, Trophy, Users } from 'lucide-react';
-import { getMyChallenges } from '@/app/actions/challenges';
+import { getMyChallenges, getChallengeableWords } from '@/app/actions/challenges';
 import { formatDuration } from '@/lib/share';
 import { formatRelativeTime } from '@/lib/relative-time';
 import PageShell from '@/components/layout/PageShell';
 import LoginPrompt from '@/components/social/LoginPrompt';
+import ChallengeWordList from '@/components/social/ChallengeWordList';
 
 export const metadata: Metadata = { title: 'Mis desafíos · Matete' };
 
 export default async function MyChallengesPage() {
-  const data = await getMyChallenges();
+  const [data, words] = await Promise.all([getMyChallenges(), getChallengeableWords()]);
 
   return (
     <PageShell>
@@ -23,11 +24,14 @@ export default async function MyChallengesPage() {
       ) : (
         <div className="space-y-8">
           <section>
+            <h2 className="font-mono text-sm tracking-widest text-[#ffaa00] mb-3">CREAR UN DESAFÍO</h2>
+            <ChallengeWordList words={words.ok ? words.words : []} />
+          </section>
+
+          <section>
             <h2 className="font-mono text-sm tracking-widest text-[#ff00ff] mb-3">LOS QUE CREÉ</h2>
             {data.created.length === 0 ? (
-              <p className="font-mono text-xs text-[#00ffff]/50">
-                Todavía no creaste ninguno. Acertá una palabra y tocá &quot;Desafiar a un amigo&quot;.
-              </p>
+              <p className="font-mono text-xs text-[#00ffff]/50">Todavía no creaste ninguno.</p>
             ) : (
               <ul className="space-y-2">
                 {data.created.map((c) => (

@@ -300,3 +300,43 @@ export async function getMyChallenges(): Promise<({ ok: true } & MyChallenges) |
     })),
   }
 }
+
+export type ChallengeableWord = {
+  wordId: number
+  /** La solución: el jugador ya la acertó, así que puede verla (solo la suya). */
+  word: string
+  length: number
+  timeTaken: number
+  /** Ya existe un desafío suyo con esta palabra (crearlo de nuevo devuelve el mismo link). */
+  challenged: boolean
+}
+
+/** Últimas palabras acertadas por el jugador, para crear un desafío desde "Mis desafíos". */
+export async function getChallengeableWords(
+  limit = 12
+): Promise<{ ok: true; words: ChallengeableWord[] } | { ok: false; error: SocialError }> {
+  const { user, error } = await requireSocialUser()
+  if (error) return { ok: false, error }
+
+  const take = Math.min(Math.max(1, Math.trunc(limit) || 12), 30)
+  const [rows, mine] = await Promise.all([
+    prisma.progress.findMany({
+      where: { userId: user.id, guessed: true },
+      orderBy: [{ endTime: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }],
+      take,
+      select: { wordId: true, timeTaken: true, word: { select: { word: true } } },
+    }),
+    prisma.challenge.findMany({ where: { creatorId: user.id }, select: { wordId: true } }),
+  ])
+  const challenged = new Set(mine.map((c) => c.wordId))
+  return {
+    ok: true,
+    words: rows.map((r) => ({
+      wordId: r.wordId,
+      word: r.word.word.toUpperCase(),
+      length: r.word.word.length,
+      timeTaken: r.timeTaken ?? 0,
+      challenged: challenged.has(r.wordId),
+    })),
+  }
+}

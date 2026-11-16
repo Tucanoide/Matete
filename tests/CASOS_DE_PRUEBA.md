@@ -63,8 +63,8 @@ El historial de corridas de prueba y corrección, con los issues de cada ciclo, 
 | DATA — Schema, migraciones, datos | 7 | 7 | 0 | 0 | 0 | 0 |
 | UI — Interacción del cliente | 21 | 21 | 0 | 0 | 0 | 0 |
 | INFRA — Dependencias, build, repo | 6 | 6 | 0 | 0 | 0 | 0 |
-| SOC — Funciones sociales | 25 | 25 | 0 | 0 | 0 | 0 |
-| **Total** | **128** | **126** | **0** | **1** | **0** | **1** |
+| SOC — Funciones sociales | 26 | 26 | 0 | 0 | 0 | 0 |
+| **Total** | **129** | **127** | **0** | **1** | **0** | **1** |
 
 Suites al 2026-11-16: **121 tests unit/componentes** (18 archivos) y **128 de integración** contra Postgres real (11 archivos), todos en verde. `tsc --noEmit`, `npm run lint` (0 errores, 0 warnings), `npm audit --audit-level=high` y `next build` pasan.
 
@@ -780,6 +780,7 @@ Spec: [specs/002-social/spec.md](../specs/002-social/spec.md). Todos ✅.
 | SOC-35 | Jugar un desafío no cambia neuronas, puntos, tiempo, nivel ni progreso | `int` | FR-028 | `challenges.int.test.ts` |
 | SOC-36 | Mis desafíos (creados y jugados), sin ids | `int` | FR-030 | `challenges.int.test.ts` |
 | SOC-37 | UI del desafío: login con regreso, creador, pool + teclado, error, rendirse, terminado | `unit` | FR-023..FR-025 | `ChallengePlay.test.tsx` |
+| SOC-38 | "Mis desafíos" permite crear un desafío desde las últimas palabras acertadas (solo las propias, sin ids; exige Google + alias) | `int` + `unit` | FR-020 | `challenges.int.test.ts`, `ChallengeWordList.test.tsx` |
 
 Verificación por mutación (2026-11-15): quitar el chequeo de acierto en `getWordComments` o la condición `"endTime" IS NULL` al cerrar un intento hace fallar SOC-11 y SOC-33. En 001, quitar `guessed = false` del acreditado hace fallar GAME-03/GAME-04.
 

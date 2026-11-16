@@ -569,3 +569,20 @@ describe('[UI-21] neuronas de la sesión', () => {
     }
   })
 })
+
+describe('[SYNC-10] el pedido de alias sigue al servidor solo para cerrarse', () => {
+  const w = () => toPublicWord({ id: 1, word: 'PLATANO', description: 'x' })
+
+  it('si el servidor informa que el alias ya está, el modal se cierra', () => {
+    const { rerender } = render(<GameEngine initialWord={w()} initialLevel={1} initialNeedsUsername />)
+    expect(screen.getByText('¡IDENTIFICATE!')).toBeInTheDocument()
+    rerender(<GameEngine initialWord={w()} initialLevel={1} initialNeedsUsername={false} />)
+    expect(screen.queryByText('¡IDENTIFICATE!')).not.toBeInTheDocument()
+  })
+
+  it('[INI-01] un re-render tras crear el invitado no abre el modal en la primera visita', () => {
+    const { rerender } = render(<GameEngine initialWord={w()} initialLevel={1} initialNeedsUsername={false} />)
+    rerender(<GameEngine initialWord={w()} initialLevel={1} initialNeedsUsername />)
+    expect(screen.queryByText('¡IDENTIFICATE!')).not.toBeInTheDocument()
+  })
+})

@@ -11,6 +11,8 @@ interface ChallengeButtonProps {
   wordId: number;
   length: number;
   creatorTime: number;
+  /** Versión chica para listas (página "Mis desafíos"). */
+  compact?: boolean;
 }
 
 const ERRORS: Record<string, string> = {
@@ -19,7 +21,7 @@ const ERRORS: Record<string, string> = {
   daily_limit: 'Llegaste al máximo de 20 desafíos por día.',
 };
 
-export default function ChallengeButton({ wordId, length, creatorTime }: ChallengeButtonProps) {
+export default function ChallengeButton({ wordId, length, creatorTime, compact = false }: ChallengeButtonProps) {
   const { status } = useSession();
   const [state, setState] = useState<'idle' | 'busy' | 'copied'>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -60,15 +62,17 @@ export default function ChallengeButton({ wordId, length, creatorTime }: Challen
   };
 
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className={`flex flex-col gap-1 ${compact ? 'items-end' : 'items-center'}`}>
       <button
         type="button"
         onClick={handleClick}
         disabled={state === 'busy'}
-        className="flex items-center justify-center gap-2 px-5 py-3 bg-[#ffaa00]/10 hover:bg-[#ffaa00]/20 border border-[#ffaa00]/40 rounded-xl font-mono text-xs md:text-sm font-bold text-[#ffaa00] disabled:opacity-60"
+        className={`flex items-center justify-center gap-2 bg-[#ffaa00]/10 hover:bg-[#ffaa00]/20 border border-[#ffaa00]/40 font-mono font-bold text-[#ffaa00] disabled:opacity-60 ${
+          compact ? 'px-3 py-1.5 rounded-lg text-[11px]' : 'px-5 py-3 rounded-xl text-xs md:text-sm'
+        }`}
       >
         {state === 'copied' ? <Check className="w-4 h-4" /> : <Swords className="w-4 h-4" />}
-        {state === 'copied' ? '¡LINK COPIADO!' : 'DESAFIAR A UN AMIGO'}
+        {state === 'copied' ? '¡LINK COPIADO!' : compact ? 'DESAFIAR' : 'DESAFIAR A UN AMIGO'}
       </button>
       {error && <p role="alert" className="text-[11px] font-mono text-[#ffaa00]/80 text-center break-all">{error}</p>}
     </div>
