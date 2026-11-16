@@ -64,7 +64,8 @@ El historial de corridas de prueba y corrección, con los issues de cada ciclo, 
 | UI — Interacción del cliente | 21 | 21 | 0 | 0 | 0 | 0 |
 | INFRA — Dependencias, build, repo | 6 | 6 | 0 | 0 | 0 | 0 |
 | SOC — Funciones sociales | 26 | 26 | 0 | 0 | 0 | 0 |
-| **Total** | **129** | **127** | **0** | **1** | **0** | **1** |
+| JOUR — Mi recorrido | 4 | 4 | 0 | 0 | 0 | 0 |
+| **Total** | **133** | **131** | **0** | **1** | **0** | **1** |
 
 Suites al 2026-11-16: **121 tests unit/componentes** (18 archivos) y **128 de integración** contra Postgres real (11 archivos), todos en verde. `tsc --noEmit`, `npm run lint` (0 errores, 0 warnings), `npm audit --audit-level=high` y `next build` pasan.
 
@@ -783,6 +784,19 @@ Spec: [specs/002-social/spec.md](../specs/002-social/spec.md). Todos ✅.
 | SOC-38 | "Mis desafíos" permite crear un desafío desde las últimas palabras acertadas (solo las propias, sin ids; exige Google + alias) | `int` + `unit` | FR-020 | `challenges.int.test.ts`, `ChallengeWordList.test.tsx` |
 
 Verificación por mutación (2026-11-15): quitar el chequeo de acierto en `getWordComments` o la condición `"endTime" IS NULL` al cerrar un intento hace fallar SOC-11 y SOC-33. En 001, quitar `guessed = false` del acreditado hace fallar GAME-03/GAME-04.
+
+---
+
+## JOUR — Mi recorrido (feature 003-recorrido)
+
+Spec: [specs/003-recorrido/spec.md](../specs/003-recorrido/spec.md). Todos ✅.
+
+| ID | Caso | Tipo | Ref | Test |
+|---|---|---|---|---|
+| JOUR-01 | Totales y avance por nivel desde `Progress` (acertadas, salteadas, en curso, tiempos, pistas); tiempos nulos fuera del promedio; nivel actual sin progreso; sin palabras ni ids; sin jugador no crea usuario | `int` | FR-002..FR-004, FR-007 | `journey.int.test.ts` |
+| JOUR-02 | Posición en el ranking con el orden del ranking global; solo Google | `int` | FR-005 | `journey.int.test.ts` |
+| JOUR-03 | Desafíos creados, jugados y ganados con la regla de victoria; null para invitados y cuentas sin alias | `int` | FR-006 | `journey.int.test.ts` |
+| JOUR-04 | Página: resumen, barras por nivel, invitación a Google para invitados, ranking y desafíos para Google, invitación a jugar sin jugador | `unit` | FR-001, FR-008 | `src/app/recorrido/page.test.tsx` |
 
 ---
 

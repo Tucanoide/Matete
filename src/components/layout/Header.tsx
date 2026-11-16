@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { useSession, signIn, signOut } from 'next-auth/react';
-import { Trophy, LogIn, LogOut, User as UserIcon, HelpCircle, Swords } from 'lucide-react';
+import { Trophy, LogIn, LogOut, User as UserIcon, HelpCircle, Swords, Map as MapIcon } from 'lucide-react';
 import Link from 'next/link';
 import RankingBoard from '../game/RankingBoard';
 import InstructionsModal from '../game/InstructionsModal';
@@ -85,6 +85,14 @@ export default function Header() {
             <HelpCircle className="w-4 h-4 text-[#00ffff] group-hover:scale-110 transition-transform" />
             <span className="font-mono text-[10px] sm:text-xs font-bold text-[#00ffff] tracking-widest uppercase">Cómo jugar</span>
           </button>
+
+          <Link
+            href="/recorrido"
+            className="flex items-center justify-center gap-2 px-3 py-2 md:px-4 bg-[#4ade80]/10 hover:bg-[#4ade80]/20 border border-[#4ade80]/30 rounded-full transition-all group shrink-0"
+          >
+            <MapIcon className="w-4 h-4 text-[#4ade80] group-hover:scale-110 transition-transform" />
+            <span className="font-mono text-[10px] sm:text-xs font-bold text-[#4ade80] tracking-widest uppercase">Mi recorrido</span>
+          </Link>
 
           {session && (
             <Link
