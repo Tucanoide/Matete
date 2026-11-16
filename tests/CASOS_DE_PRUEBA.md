@@ -11,6 +11,8 @@ it('[GAME-03] no acredita puntaje al re-enviar una palabra ya resuelta', async (
 
 Para ver qué tests cubren un caso: `grep -rn "\[GAME-03\]" src`.
 
+El historial de corridas de prueba y corrección, con los issues de cada ciclo, está en [HISTORIAL_CICLOS.md](./HISTORIAL_CICLOS.md).
+
 **Cambios de la v2.1 (2026-11-16):** tres ciclos de prueba y corrección cerraron los 12 defectos abiertos y los parciales/sin cobertura que tenían defecto detrás (AUTH-08, SYNC-08, USER-07, DATA-05, DATA-06, UI-16). Casos nuevos: SYNC-10, RANK-07, UI-21, UI-22 y SOC-25. La Server Action `useHint` pasó a llamarse `requestHint` (el prefijo `use` la hacía pasar por un hook de React). Queda abierto solo AUTH-09 (login real con Google, manual).
 
 **Cambios respecto de la v1.0 (2026-08-06):** los defectos que corrigió `001-hardening` pasan a ✅ con su test; se agregan el caso de inicio (INI), los de identidad firmada (AUTH-10..12), entrega y formato (GAME-12, GAME-13), fin de juego (PROG-09), alias en la migración (SYNC-09), UI (UI-17..19), infraestructura pública (INFRA-06) y las funciones sociales (SOC). Los casos que describían código que ya no existe (`recordWordSolved`, `getRandomWordFromLevel`, `getUser`, cookie `matete-guest-id` como única identidad) se reescribieron sobre el código actual.
