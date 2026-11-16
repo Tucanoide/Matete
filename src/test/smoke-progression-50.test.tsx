@@ -1,17 +1,30 @@
-import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import GameEngine from '../components/game/GameEngine';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import * as actions from '../app/actions/game';
+import { toPublicWord } from '../lib/public-word';
 
 // Mock Server Actions
 vi.mock('../app/actions/game', () => ({
-  getRandomWordFromLevel: vi.fn(),
-  recordWordSolved: vi.fn(),
-  useHint: vi.fn(),
+  getNextWord: vi.fn(),
+  startWord: vi.fn(() => Promise.resolve({ ok: true })),
+  submitGuess: vi.fn(),
+  requestHint: vi.fn(),
   moveToNextLevel: vi.fn(),
   getRandomMessage: vi.fn(() => Promise.resolve('¡Excelente!')),
 }));
+
+vi.mock('../app/actions/comments', () => ({
+  getWordComments: vi.fn(() => Promise.resolve({ locked: false, comments: [], nextCursor: null, canPost: false, postBlockedReason: 'login_required' })),
+  postComment: vi.fn(),
+  reportComment: vi.fn(),
+  deleteComment: vi.fn(),
+}))
+
+vi.mock('../app/actions/challenges', () => ({
+  createChallenge: vi.fn(),
+}))
 
 // Mock Sound Manager
 vi.mock('../lib/sounds', () => ({
@@ -23,103 +36,82 @@ vi.mock('../lib/sounds', () => ({
 
 // Mock Next-Auth
 vi.mock('next-auth/react', () => ({
-  useSession: vi.fn(() => ({ 
-    data: { user: { name: 'Test Player', neuronas: 100 } }, 
-    update: vi.fn() 
+  useSession: vi.fn(() => ({
+    data: { user: { name: 'Test Player', neuronas: 100 } },
+    update: vi.fn()
   })),
   signOut: vi.fn(),
+  signIn: vi.fn(),
 }));
 
 // Mock Framer Motion to avoid animation delays in tests
 vi.mock('framer-motion', async () => {
-  const actual = await vi.importActual('framer-motion') as any;
+  const actual = await vi.importActual<typeof import('framer-motion')>('framer-motion');
   return {
     ...actual,
     motion: {
       ...actual.motion,
-      div: ({ children, ...props }: any) => <div {...props}>{children}</div>,
-      button: ({ children, ...props }: any) => <button {...props}>{children}</button>,
+      div: ({ children, ...props }: React.HTMLAttributes<HTMLDivElement>) => <div {...props}>{children}</div>,
+      button: ({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => <button {...props}>{children}</button>,
     },
-    AnimatePresence: ({ children }: any) => <>{children}</>,
+    AnimatePresence: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   };
 });
 
+const solved = (i: number, isLevelComplete: boolean) => ({
+  correct: true as const,
+  solution: i === 1 ? 'TEST' : 'NEXT',
+  alreadySolved: false,
+  neuronas: 100 + i * 10,
+  points: i,
+  isLevelComplete,
+  levelStats: { solved: i, total: 50, levelId: 1 },
+  result: { timeTaken: 10, revealedIndices: [] as number[] },
+});
+
 describe('Progression Smoke Test - 50 Words', () => {
-  const initialWord = 'TEST';
-  const initialDescription = 'Prueba inicial';
+  const initialWord = toPublicWord({ id: 100, word: 'TEST', description: 'Prueba inicial' });
   const initialLevel = 1;
-  const initialWordId = 100;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(actions.recordWordSolved).mockResolvedValue({
-      success: true,
-      isLevelComplete: false,
-      levelStats: { solved: 1, total: 50, levelId: 1 },
-      updatedUser: { id: 'u1', neuronas: 110 } as any
-    });
-
-    vi.mocked(actions.getRandomWordFromLevel).mockResolvedValue({
-      id: 101,
-      word: 'NEXT',
-      description: 'Siguiente palabra de prueba',
-      levelId: 1
-    } as any);
+    vi.mocked(actions.getNextWord).mockResolvedValue(
+      toPublicWord({ id: 101, word: 'NEXT', description: 'Siguiente palabra de prueba' })
+    );
   });
 
-  it('should pass to level-up state after 50 words are solved', async () => {
+  it('[GAME-11] [PROG-01] should pass to level-up state after 50 words are solved', async () => {
     const user = userEvent.setup();
-    
-    render(
-      <GameEngine 
-        initialWord={initialWord} 
-        initialDescription={initialDescription} 
-        initialLevel={initialLevel} 
-        initialWordId={initialWordId}
-      />
-    );
+
+    render(<GameEngine initialWord={initialWord} initialLevel={initialLevel} />);
 
     for (let i = 1; i <= 50; i++) {
       const isLastWord = i === 50;
-      
-      // Mock the solve response
-      vi.mocked(actions.recordWordSolved).mockResolvedValueOnce({
-        success: true,
-        isLevelComplete: isLastWord,
-        levelStats: { solved: i, total: 50, levelId: 1 },
-        updatedUser: { id: 'u1', neuronas: 100 + i*10 } as any
-      });
 
-      // Type the correct word
-      const wordToType = (i === 1) ? initialWord : 'NEXT';
+      // El servidor valida y acredita
+      vi.mocked(actions.submitGuess).mockResolvedValueOnce(solved(i, isLastWord));
+
+      const wordToType = (i === 1) ? 'TEST' : 'NEXT';
       await user.keyboard(wordToType);
 
-      // WAIT for the action to be triggered and completed
-      await waitFor(() => expect(actions.recordWordSolved).toHaveBeenCalledTimes(i), { timeout: 2000 });
+      await waitFor(() => expect(actions.submitGuess).toHaveBeenCalledTimes(i), { timeout: 2000 });
 
       if (!isLastWord) {
-        // Setup next word mock for the NEXT iteration
-        vi.mocked(actions.getRandomWordFromLevel).mockResolvedValueOnce({
-          id: 100 + i + 1,
-          word: 'NEXT',
-          description: 'Desc ' + (i+1),
-          levelId: 1
-        } as any);
+        vi.mocked(actions.getNextWord).mockResolvedValueOnce(
+          toPublicWord({ id: 100 + i + 1, word: 'NEXT', description: 'Desc ' + (i + 1) })
+        );
 
-        // Find "SIGUIENTE" button and click it to move to next word
         const nextBtn = await screen.findByText(/SIGUIENTE/i);
         await user.click(nextBtn);
-        
-        // Wait for the button to disappear
+
         await waitFor(() => expect(screen.queryByText(/SIGUIENTE/i)).not.toBeInTheDocument());
       }
     }
 
-    // Finally verify the level complete modal appears
     await waitFor(() => {
       expect(screen.getByText(/¡NIVEL 1 COMPLETADO!/i)).toBeInTheDocument();
     }, { timeout: 10000 });
-    
-    expect(actions.recordWordSolved).toHaveBeenCalledTimes(50);
-  }, 120000); // 2 minutes for 50 words simulation
+
+    expect(actions.submitGuess).toHaveBeenCalledTimes(50);
+  }, 120000);
 });

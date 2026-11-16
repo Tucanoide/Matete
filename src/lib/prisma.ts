@@ -5,7 +5,7 @@ import pg from 'pg'
 const prismaClientSingleton = () => {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL })
   const adapter = new PrismaPg(pool)
-  return new PrismaClient({ adapter } as any)
+  return new PrismaClient({ adapter })
 }
 
 declare global {

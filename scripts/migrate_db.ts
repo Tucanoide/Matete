@@ -3,6 +3,9 @@ import pg from 'pg';
 import initSqlite from 'sqlite3';
 import { promisify } from 'util';
 
+/** Fila de la base SQLite legacy (B4A). */
+type LegacyRow = Record<string, string | number | null>;
+
 async function migrate() {
   const db = new initSqlite.Database('./Matete B4A/bases/BaseJv57SEc.sqlite');
   const all = promisify(db.all.bind(db));
@@ -13,7 +16,7 @@ async function migrate() {
     console.log('Starting direct migration...');
 
     // Migrate Levels
-    const levels: any = await all('SELECT * FROM Niveles');
+    const levels = (await all('SELECT * FROM Niveles')) as LegacyRow[];
     console.log(`Found ${levels.length} levels in SQLite.`);
     
     for (const level of levels) {
@@ -43,7 +46,7 @@ async function migrate() {
     console.log(`Migrated ${levels.length} levels.`);
 
     // Migrate Words
-    const words: any = await all('SELECT * FROM Palabras_Almacen');
+    const words = (await all('SELECT * FROM Palabras_Almacen')) as LegacyRow[];
     console.log(`Found ${words.length} words in SQLite.`);
     
     for (const word of words) {

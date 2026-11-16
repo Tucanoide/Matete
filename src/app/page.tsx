@@ -1,11 +1,12 @@
 import Header from '@/components/layout/Header';
 import GameEngine from '@/components/game/GameEngine';
-import { getInitialGameState } from '@/app/actions/game';
+import { getInitialGameState, getGameCompletion } from '@/app/actions/game';
+import GameOverPanel from '@/components/game/GameOverPanel';
 
 export default async function Home() {
   const gameState = await getInitialGameState();
-  const firstLevel = gameState?.level;
-  const firstWord = gameState?.word;
+  // Sin palabra para entregar: o terminó el juego (PROG-09) o la base no tiene palabras.
+  const completion = gameState ? null : await getGameCompletion();
 
   return (
     <main className="min-h-screen bg-[#050510] text-[#00ffff] font-sans selection:bg-[#ff00ff]/30">
@@ -22,19 +23,21 @@ export default async function Home() {
       <div className="relative z-10 max-w-5xl mx-auto px-4 py-8 md:py-12">
         <Header />
 
-        {firstWord && firstLevel ? (
-          <GameEngine 
-            initialWord={firstWord.word}
-            initialDescription={firstWord.description}
-            initialLevel={firstLevel.id}
-            initialWordId={firstWord.id}
-            initialRevealedIndices={gameState?.revealedIndices}
-            initialNeedsUsername={gameState?.needsUsername}
-            initialNeuronas={gameState?.neuronas ?? 50}
+        {gameState ? (
+          <GameEngine
+            // Si el servidor devuelve otro estado (p. ej. tras migrar el invitado), el juego se reinicia con él.
+            key={`${gameState.word.wordId}:${gameState.levelId}:${gameState.needsUsername}:${gameState.neuronas}`}
+            initialWord={gameState.word}
+            initialLevel={gameState.levelId}
+            initialNeedsUsername={gameState.needsUsername}
+            initialNeuronas={gameState.neuronas}
+            initialCosts={gameState.costs}
           />
+        ) : completion?.completed ? (
+          <GameOverPanel points={completion.points} />
         ) : (
           <div className="text-center py-20 bg-[#1a1033]/40 border-2 border-[#ff00ff]/30 rounded-2xl backdrop-blur-xl">
-            <p className="text-xl font-mono animate-pulse">Cargando base de datos...</p>
+            <p className="text-xl font-mono">No hay palabras disponibles por ahora.</p>
           </div>
         )}
       </div>

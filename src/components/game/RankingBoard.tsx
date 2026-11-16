@@ -1,8 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Trophy, Clock, Brain, User, X } from 'lucide-react';
+import { useSession } from 'next-auth/react';
+import FollowButton from '@/components/social/FollowButton';
+import FriendsTab from '@/components/social/FriendsTab';
 import { getGlobalRanking, getLevelRanking } from '@/app/actions/game';
 
 interface RankingBoardProps {
@@ -10,13 +13,29 @@ interface RankingBoardProps {
   currentLevel: number;
 }
 
+/** Fila de cualquiera de los dos rankings (global o por nivel). */
+type RankingRow = {
+  name: string | null;
+  username: string | null;
+  image: string | null;
+  isMe: boolean;
+  isFollowed: boolean;
+  points?: number;
+  totalTime?: number;
+  neuronas?: number;
+  levelPoints?: number;
+  levelTime?: number;
+};
+
 export default function RankingBoard({ onClose, currentLevel }: RankingBoardProps) {
-  const [activeTab, setActiveTab] = useState<'global' | 'level'>('global');
-  const [rankingData, setRankingData] = useState<any[]>([]);
+  const { status } = useSession();
+  const [activeTab, setActiveTab] = useState<'global' | 'level' | 'friends'>('global');
+  const [rankingData, setRankingData] = useState<RankingRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchRanking = async () => {
+      if (activeTab === 'friends') return;
       setIsLoading(true);
       try {
         if (activeTab === 'global') {
@@ -71,7 +90,7 @@ export default function RankingBoard({ onClose, currentLevel }: RankingBoardProp
               activeTab === 'global' ? 'text-[#00ffff] border-b-2 border-[#00ffff] bg-[#00ffff]/5' : 'text-[#00ffff]/40 hover:text-[#00ffff]/70'
             }`}
           >
-            Global Top 10
+            Top 10
           </button>
           <button 
             onClick={() => setActiveTab('level')}
@@ -81,11 +100,21 @@ export default function RankingBoard({ onClose, currentLevel }: RankingBoardProp
           >
             Nivel {currentLevel}
           </button>
+          <button 
+            onClick={() => setActiveTab('friends')}
+            className={`flex-1 py-4 font-mono text-sm tracking-widest uppercase transition-all ${
+              activeTab === 'friends' ? 'text-[#00ffff] border-b-2 border-[#00ffff] bg-[#00ffff]/5' : 'text-[#00ffff]/40 hover:text-[#00ffff]/70'
+            }`}
+          >
+            Amigos
+          </button>
         </div>
 
         {/* List */}
         <div className="p-4 md:p-6 h-[400px] overflow-y-auto custom-scrollbar">
-          {isLoading ? (
+          {activeTab === 'friends' ? (
+            <FriendsTab />
+          ) : isLoading ? (
             <div className="flex flex-col items-center justify-center h-full gap-4">
               <div className="w-12 h-12 border-4 border-[#ff00ff]/20 border-t-[#ff00ff] rounded-full animate-spin" />
               <p className="font-mono text-xs text-[#ff00ff] animate-pulse">CARGANDO TRANSMISIÓN...</p>
@@ -99,7 +128,7 @@ export default function RankingBoard({ onClose, currentLevel }: RankingBoardProp
             <div className="space-y-3">
               {rankingData.map((user, index) => (
                 <motion.div
-                  key={user.id}
+                  key={`${index}-${user.username ?? user.name ?? ''}`}
                   initial={{ x: -20, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   transition={{ delay: index * 0.05 }}
@@ -116,7 +145,9 @@ export default function RankingBoard({ onClose, currentLevel }: RankingBoardProp
                   
                   <div className="w-10 h-10 rounded-full border border-[#ff00ff]/40 overflow-hidden bg-[#1a1033]">
                     {user.image ? (
-                      <img src={user.image} alt={user.name} className="w-full h-full object-cover" />
+                      // Avatar de Google (host externo variable): <img> a propósito.
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={user.image} alt={user.name ?? ""} className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-[#ff00ff]/10">
                         <User className="w-6 h-6 text-[#ff00ff]/50" />
@@ -133,7 +164,7 @@ export default function RankingBoard({ onClose, currentLevel }: RankingBoardProp
                         <Trophy className="w-3 h-3" /> {activeTab === 'level' ? user.levelPoints : user.points} P
                       </div>
                       <div className="flex items-center gap-1 text-[10px] font-mono text-[#00ffff]/80 whitespace-nowrap">
-                        <Clock className="w-3 h-3" /> {formatTime(activeTab === 'level' ? user.levelTime : user.totalTime)}
+                        <Clock className="w-3 h-3" /> {formatTime((activeTab === "level" ? user.levelTime : user.totalTime) ?? 0)}
                       </div>
                       {activeTab === 'global' && (
                         <div className="flex items-center gap-1 text-[10px] font-mono text-green-400/80 whitespace-nowrap">
@@ -142,6 +173,9 @@ export default function RankingBoard({ onClose, currentLevel }: RankingBoardProp
                       )}
                     </div>
                   </div>
+                  {status === 'authenticated' && user.username && !user.isMe && (
+                    <FollowButton username={user.username} initialFollowed={!!user.isFollowed} />
+                  )}
                 </motion.div>
               ))}
             </div>

@@ -11,22 +11,27 @@ interface UsernameModalProps {
 
 export default function UsernameModal({ onSuccess }: UsernameModalProps) {
   const [username, setUsername] = useState('');
-  const [status, setStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'error'>('idle');
+  const [checkStatus, setStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'error'>('idle');
+  // Menos de 3 caracteres: siempre 'idle' (derivado; no hace falta setState en el efecto).
+  const status = username.length < 3 ? 'idle' : checkStatus;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (username.length < 3) {
-      setStatus('idle');
-      return;
-    }
+    if (username.length < 3) return;
 
     const timer = setTimeout(async () => {
       setStatus('checking');
       try {
         const result = await checkUsername(username);
+        if (result.error === 'rate_limited') {
+          setStatus('error');
+          setError('Demasiadas consultas. Esperá un minuto.');
+          return;
+        }
+        setError(null);
         setStatus(result.available ? 'available' : 'taken');
-      } catch (err) {
+      } catch {
         setStatus('error');
       }
     }, 500);
@@ -43,12 +48,12 @@ export default function UsernameModal({ onSuccess }: UsernameModalProps) {
 
     try {
       const result = await updateUsername(username);
-      if (result.success) {
+      if (result.success || result.alreadySet) {
         onSuccess();
       } else {
         setError(result.error || 'No se pudo guardar el nombre.');
       }
-    } catch (err) {
+    } catch {
       setError('Ocurrió un error inesperado.');
     } finally {
       setIsSubmitting(false);
@@ -75,8 +80,8 @@ export default function UsernameModal({ onSuccess }: UsernameModalProps) {
             ¡IDENTIFICATE!
           </h2>
           <p className="text-[#00ffff]/60 text-sm mb-8 font-mono">
-            Elegí un nombre de usuario para el ranking. 
-            No queremos mostrar tu mail.
+            Elegí tu nombre de fantasía para jugar.
+            Si después entrás con Google, lo conservás y aparece en el ranking.
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-6">

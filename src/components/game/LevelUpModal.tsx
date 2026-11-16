@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Trophy, Star, ArrowRight, Brain, Clock } from 'lucide-react';
+import { Trophy, Star, ArrowRight, Brain } from 'lucide-react';
 
 interface LevelUpModalProps {
   level: number;

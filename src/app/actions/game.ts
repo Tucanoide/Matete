@@ -1,515 +1,501 @@
 'use server'
 
 import prisma from '@/lib/prisma'
-import { getServerSession } from 'next-auth'
-import { authOptions } from '@/lib/auth'
-import { cookies } from 'next/headers'
+import type { Prisma } from '@prisma/client'
+import { ensureCurrentUser, getCurrentUser } from '@/lib/identity'
+import { isCorrectGuess, isValidGuessFormat, toPublicWord, type PublicWord, type RevealedLetter } from '@/lib/public-word'
+import { isValidUsername, USERNAME_CHECKS_PER_MINUTE } from '@/lib/username'
 
-const GUEST_COOKIE_NAME = 'matete-guest-id'
+// Server Actions del juego. Contrato: specs/001-hardening/contracts/server-actions.md
+// Reglas (constitución): el servidor decide todo lo que tiene valor; nunca se devuelve
+// User.id ni la solución de una palabra no resuelta.
 
-export async function getUser() {
-  const session = await getServerSession(authOptions)
-  
-  if (session?.user?.email) {
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
-    if (user) return user
+type Db = typeof prisma | Prisma.TransactionClient
+type User = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>
+
+const DEFAULT_LETTER_COST = 5
+const DEFAULT_SKIP_COST = 15
+const REWARD_NEURONAS = 10
+const MAX_LETTER_HINTS = 2
+
+export type LevelStats = { solved: number; total: number; levelId: number }
+
+class ActionError extends Error {}
+
+// ---------------------------------------------------------------------------
+// Helpers internos (no exportados: no son Server Actions)
+// ---------------------------------------------------------------------------
+
+export type GameCosts = { letter: number; skip: number }
+
+/**
+ * Costos de pista y salto: única fuente (constitución, principio 4). Viven en `Setting`
+ * (`costo_pista`, `costo_salto`); el cliente los recibe en getInitialGameState y el
+ * servidor cobra exactamente estos valores (HINT-09).
+ */
+async function getCosts(): Promise<GameCosts> {
+  const rows = await prisma.setting.findMany({ where: { id: { in: ['costo_pista', 'costo_salto'] } } })
+  const read = (id: string, fallback: number) => {
+    const parsed = parseInt(rows.find((r) => r.id === id)?.value ?? '', 10)
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
+  }
+  return { letter: read('costo_pista', DEFAULT_LETTER_COST), skip: read('costo_salto', DEFAULT_SKIP_COST) }
+}
+
+async function getLevelStats(db: Db, userId: string, levelId: number): Promise<LevelStats> {
+  const [total, solved] = await Promise.all([
+    db.word.count({ where: { levelId } }),
+    db.progress.count({
+      where: { userId, word: { levelId }, OR: [{ guessed: true }, { skipped: true }] },
+    }),
+  ])
+  return { solved, total, levelId }
+}
+
+/** La palabra está en juego si es del nivel del jugador y no está acertada ni salteada. */
+async function findWordInPlay(db: Db, user: User, wordId: number) {
+  if (!Number.isInteger(wordId)) return null
+  const word = await db.word.findUnique({ where: { id: wordId } })
+  if (!word || word.levelId !== user.levelId) return null
+  const progress = await db.progress.findUnique({ where: { userId_wordId: { userId: user.id, wordId } } })
+  if (progress?.guessed || progress?.skipped) return null
+  return { word, progress }
+}
+
+/** Registra la entrega de una palabra (create-only: conserva el primer startTime). */
+async function registerDelivery(db: Db, userId: string, wordId: number) {
+  await db.progress.createMany({
+    data: [{ userId, wordId, startTime: new Date() }],
+    skipDuplicates: true,
+  })
+}
+
+async function publicWordFor(db: Db, userId: string, word: { id: number; word: string; description: string }): Promise<PublicWord> {
+  const progress = await db.progress.findUnique({
+    where: { userId_wordId: { userId, wordId: word.id } },
+    select: { revealedIndices: true },
+  })
+  return toPublicWord(word, progress?.revealedIndices ?? [])
+}
+
+async function doneWordIds(db: Db, userId: string): Promise<number[]> {
+  const rows = await db.progress.findMany({
+    where: { userId, OR: [{ guessed: true }, { skipped: true }] },
+    select: { wordId: true },
+  })
+  return rows.map((r) => r.wordId)
+}
+
+// ---------------------------------------------------------------------------
+// Entrega de palabras
+// ---------------------------------------------------------------------------
+
+export async function getInitialGameState(): Promise<{
+  word: PublicWord
+  levelId: number
+  neuronas: number
+  needsUsername: boolean
+  costs: GameCosts
+} | null> {
+  const [user, costs] = await Promise.all([getCurrentUser(), getCosts()])
+
+  if (!user) {
+    const firstLevel = await prisma.level.findFirst({ orderBy: { id: 'asc' } })
+    if (!firstLevel) return null
+    const firstWord = await prisma.word.findFirst({ where: { levelId: firstLevel.id }, orderBy: { id: 'asc' } })
+    if (!firstWord) return null
+    return { word: toPublicWord(firstWord), levelId: firstLevel.id, neuronas: 50, needsUsername: false, costs }
   }
 
-  const cookieStore = await cookies()
-  const guestId = cookieStore.get(GUEST_COOKIE_NAME)?.value
+  const done = new Set(await doneWordIds(prisma, user.id))
+  let levelId = user.levelId
+  let words = await prisma.word.findMany({ where: { levelId }, orderBy: { id: 'asc' } })
+  let next = words.find((w) => !done.has(w.id))
 
-  if (guestId) {
-    const user = await prisma.user.findUnique({
-      where: { id: guestId }
-    })
-    if (user) return user
+  // Nivel completo al reingresar: avanzar al siguiente nivel con palabras.
+  if (!next) {
+    const nextLevel = await prisma.level.findFirst({ where: { id: { gt: levelId } }, orderBy: { id: 'asc' } })
+    if (!nextLevel) return null // todos los niveles completos
+    levelId = nextLevel.id
+    await prisma.user.update({ where: { id: user.id }, data: { levelId } })
+    words = await prisma.word.findMany({ where: { levelId }, orderBy: { id: 'asc' } })
+    next = words.find((w) => !done.has(w.id))
+    if (!next) return null
   }
 
-  return null;
-}
-
-export async function ensureUser() {
-  let user = await getUser();
-  if (user) return user;
-
-  const newUser = await prisma.user.create({
-    data: {
-      name: 'Explorador Anónimo',
-      neuronas: 50,
-      levelId: 1
-    }
-  })
-
-  const cookieStore = await cookies()
-  cookieStore.set(GUEST_COOKIE_NAME, newUser.id, {
-    maxAge: 60 * 60 * 24 * 30,
-    path: '/'
-  })
-
-  return newUser
-}
-
-export async function recordWordSolved(wordId: number, timeTaken: number) {
-  const user = await ensureUser()
-  if (!user) return { success: false, error: 'User not found' }
-
-  // Fetch the word to know its level
-  const solvedWord = await prisma.word.findUnique({
-    where: { id: wordId },
-    select: { levelId: true }
-  })
-  if (!solvedWord) return { success: false, error: 'Word not found' }
-
-  // 1. Create progress record
-  await prisma.progress.upsert({
-    where: {
-      userId_wordId: {
-        userId: user.id,
-        wordId: wordId
-      }
-    },
-    update: {
-      guessed: true,
-      timeTaken,
-      endTime: new Date()
-    },
-    create: {
-      userId: user.id,
-      wordId,
-      guessed: true,
-      timeTaken,
-      endTime: new Date()
-    }
-  })
-
-  // 2. Update user neuronas and points
-  const updatedUser = await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      neuronas: { increment: 10 },
-      points: { increment: 1 },
-      totalTime: { increment: timeTaken }
-    }
-  })
-
-  // 3. Check level completion (count both guessed and skipped)
-  const totalWordsInLevel = await prisma.word.count({
-    where: { levelId: solvedWord.levelId }
-  })
-
-  const processedWordsInLevel = await prisma.progress.count({
-    where: {
-      userId: user.id,
-      word: { levelId: solvedWord.levelId },
-      OR: [
-        { guessed: true },
-        { skipped: true }
-      ]
-    }
-  })
-
-  const isLevelComplete = processedWordsInLevel >= totalWordsInLevel
-
-  return { 
-    success: true, 
-    updatedUser, 
-    isLevelComplete,
-    levelStats: {
-      solved: processedWordsInLevel,
-      total: totalWordsInLevel,
-      levelId: solvedWord.levelId
-    }
+  await registerDelivery(prisma, user.id, next.id)
+  return {
+    word: await publicWordFor(prisma, user.id, next),
+    levelId,
+    neuronas: user.neuronas,
+    needsUsername: !user.username,
+    costs,
   }
 }
 
-export async function getGameSettings() {
-  const settings = await prisma.setting.findMany();
-  return Object.fromEntries(settings.map(s => [s.id, s.value]));
+/**
+ * Fin del juego (PROG-09): el jugador resolvió o salteó todas las palabras de todos los
+ * niveles. La home lo usa cuando getInitialGameState no tiene palabra para entregar.
+ */
+export async function getGameCompletion(): Promise<{ completed: boolean; points: number }> {
+  const user = await getCurrentUser()
+  if (!user) return { completed: false, points: 0 }
+  const [total, done] = await Promise.all([
+    prisma.word.count(),
+    prisma.progress.count({ where: { userId: user.id, OR: [{ guessed: true }, { skipped: true }] } }),
+  ])
+  return { completed: total > 0 && done >= total, points: user.points }
 }
 
-export async function getRandomMessage(type: 'success' | 'fail') {
-  const messages = await prisma.gameMessage.findMany({
-    where: { type }
-  });
-  if (messages.length === 0) return type === 'success' ? '¡Correcto!' : '¡Error!';
-  return messages[Math.floor(Math.random() * messages.length)].content;
+/** Lo llama el GameEngine al montar: crea el invitado/cookie si hace falta y registra la entrega. */
+export async function startWord(wordId: number): Promise<{ ok: true } | { ok: false; error: 'not_in_play' }> {
+  const user = await ensureCurrentUser()
+  const inPlay = await findWordInPlay(prisma, user, wordId)
+  if (!inPlay) return { ok: false, error: 'not_in_play' }
+  await registerDelivery(prisma, user.id, wordId)
+  return { ok: true }
 }
 
-export async function useHint(wordId: number, type: 'letter' | 'skip') {
-  const user = await ensureUser()
-  if (!user) return { success: false, error: 'User not found' }
-
-  // Get dynamic costs
-  const settings = await getGameSettings();
-  const costLetter = parseInt(settings['costo_pista'] || '5');
-  const costSkip = 15; // default skip cost
-  
-  const cost = type === 'letter' ? costLetter : costSkip;
-  
-  if (user.neuronas < cost) return { success: false, error: 'Not enough neuronas' }
-
-  // 0. If it's a letter hint, check the 2-hint limit and handle revealed indices
-  let revealedIndices: number[] = [];
-  if (type === 'letter') {
-    const progress = await prisma.progress.findUnique({
-      where: { userId_wordId: { userId: user.id, wordId } },
-      select: { revealedIndices: true }
-    });
-    
-    const currentIndices = progress?.revealedIndices || [];
-    if (currentIndices.length >= 2) {
-      return { success: false, error: 'Has alcanzado el límite de 2 pistas para esta palabra.' };
-    }
-
-    const word = await prisma.word.findUnique({
-      where: { id: wordId },
-      select: { word: true }
-    });
-    if (!word) return { success: false, error: 'Word not found' };
-
-    // Find a random position not yet revealed
-    const availablePositions = Array.from({ length: word.word.length }, (_, i) => i)
-      .filter(i => !currentIndices.includes(i));
-    
-    if (availablePositions.length === 0) return { success: false, error: 'No hay más letras para revelar.' };
-
-    const randomIndex = availablePositions[Math.floor(Math.random() * availablePositions.length)];
-    revealedIndices = [...currentIndices, randomIndex];
-
-    // Update progress with new index
-    await prisma.progress.upsert({
-      where: { userId_wordId: { userId: user.id, wordId } },
-      update: { revealedIndices },
-      create: { userId: user.id, wordId, revealedIndices }
-    });
-  }
-
-  // 1. Deduct neuronas
-  const updatedUser = await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      neuronas: { decrement: cost }
-    }
+/** Palabra al azar en juego del nivel del jugador. `levelId` se ignora si no es el del jugador. */
+export async function getNextWord(_levelId?: number): Promise<PublicWord | null> {
+  const user = await ensureCurrentUser()
+  const done = await doneWordIds(prisma, user.id)
+  const available = await prisma.word.findMany({
+    where: { levelId: user.levelId, id: { notIn: done } },
   })
+  if (available.length === 0) return null
 
-  // 2. If it's a skip, mark as skipped
-  if (type === 'skip') {
-    await prisma.progress.upsert({
-      where: {
-        userId_wordId: {
-          userId: user.id,
-          wordId: wordId
-        }
+  const word = available[Math.floor(Math.random() * available.length)]
+  await registerDelivery(prisma, user.id, word.id)
+  return publicWordFor(prisma, user.id, word)
+}
+
+export async function moveToNextLevel(): Promise<
+  | { success: true; nextLevelId: number; nextWord: PublicWord | null; neuronas: number }
+  | { success: false; error: string; gameOver?: true }
+> {
+  const user = await ensureCurrentUser()
+
+  const stats = await getLevelStats(prisma, user.id, user.levelId)
+  if (stats.solved < stats.total) return { success: false, error: 'El nivel actual no está completo.' }
+
+  const nextLevel = await prisma.level.findFirst({ where: { id: { gt: user.levelId } }, orderBy: { id: 'asc' } })
+  if (!nextLevel) return { success: false, error: 'No hay más niveles.', gameOver: true }
+
+  const updated = await prisma.user.update({ where: { id: user.id }, data: { levelId: nextLevel.id } })
+
+  const done = await doneWordIds(prisma, user.id)
+  const word = await prisma.word.findFirst({
+    where: { levelId: nextLevel.id, id: { notIn: done } },
+    orderBy: { id: 'asc' },
+  })
+  if (word) await registerDelivery(prisma, user.id, word.id)
+
+  return {
+    success: true,
+    nextLevelId: nextLevel.id,
+    nextWord: word ? await publicWordFor(prisma, user.id, word) : null,
+    neuronas: updated.neuronas,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Validación del intento y acreditación (S-2, S-3, S-4)
+// ---------------------------------------------------------------------------
+
+export type SubmitGuessResult =
+  | { correct: false }
+  | {
+      correct: true
+      solution: string
+      alreadySolved: boolean
+      neuronas: number
+      points: number
+      isLevelComplete: boolean
+      levelStats: LevelStats
+      /** Lo que registró el servidor para este acierto; alimenta el texto para compartir (002-social FR-003). */
+      result: { timeTaken: number; revealedIndices: number[] }
+    }
+  | { error: 'not_in_play' | 'invalid_guess' }
+
+export async function submitGuess(wordId: number, guess: string): Promise<SubmitGuessResult> {
+  const user = await ensureCurrentUser()
+
+  const word = Number.isInteger(wordId) ? await prisma.word.findUnique({ where: { id: wordId } }) : null
+  if (!word || word.levelId !== user.levelId) return { error: 'not_in_play' }
+
+  const progress = await prisma.progress.findUnique({ where: { userId_wordId: { userId: user.id, wordId } } })
+  if (progress?.skipped && !progress.guessed) return { error: 'not_in_play' }
+
+  if (!isValidGuessFormat(guess, word.word.length)) return { error: 'invalid_guess' }
+  if (!isCorrectGuess(guess, word.word)) return { correct: false }
+
+  const result = await prisma.$transaction(async (tx) => {
+    await registerDelivery(tx, user.id, wordId)
+
+    // Transición guessed=false → true una sola vez; el tiempo lo mide el servidor.
+    // startTime/endTime son timestamp sin zona escritos en UTC por Prisma.
+    const rows = await tx.$queryRaw<{ timeTaken: number }[]>`
+      UPDATE "Progress"
+      SET guessed = true,
+          "endTime" = (now() AT TIME ZONE 'UTC'),
+          "timeTaken" = GREATEST(0, EXTRACT(EPOCH FROM ((now() AT TIME ZONE 'UTC') - "startTime")))::float8
+      WHERE "userId" = ${user.id} AND "wordId" = ${wordId} AND guessed = false AND skipped = false
+      RETURNING "timeTaken"`
+
+    if (rows.length === 0) {
+      const current = await tx.user.findUniqueOrThrow({ where: { id: user.id } })
+      return { credited: false, user: current }
+    }
+
+    const updated = await tx.user.update({
+      where: { id: user.id },
+      data: {
+        neuronas: { increment: REWARD_NEURONAS },
+        points: { increment: 1 },
+        totalTime: { increment: Number(rows[0].timeTaken) },
       },
-      update: { skipped: true },
-      create: {
-        userId: user.id,
-        wordId,
-        skipped: true
-      }
     })
-  }
+    return { credited: true, user: updated }
+  })
 
-  // 3. If it's a skip, check for level completion
-  if (type === 'skip') {
-    const word = await prisma.word.findUnique({
-      where: { id: wordId },
-      select: { levelId: true }
-    });
-    
-    if (word) {
-      const totalWords = await prisma.word.count({ where: { levelId: word.levelId } });
-      const processedWords = await prisma.progress.count({
-        where: {
-          userId: user.id,
-          word: { levelId: word.levelId },
-          OR: [{ guessed: true }, { skipped: true }]
-        }
-      });
-      
-      const isLevelComplete = processedWords >= totalWords;
-      
-      return { 
-        success: true, 
-        remainingNeuronas: updatedUser.neuronas,
-        isLevelComplete,
-        levelStats: {
-          solved: processedWords,
-          total: totalWords,
-          levelId: word.levelId
-        }
-      }
-    }
-  }
-
-  return { 
-    success: true, 
-    remainingNeuronas: updatedUser.neuronas,
-    revealedIndices: type === 'letter' ? revealedIndices : undefined 
+  const [stats, solved] = await Promise.all([
+    getLevelStats(prisma, user.id, word.levelId),
+    prisma.progress.findUniqueOrThrow({
+      where: { userId_wordId: { userId: user.id, wordId } },
+      select: { timeTaken: true, revealedIndices: true },
+    }),
+  ])
+  return {
+    correct: true,
+    solution: word.word.toUpperCase(),
+    alreadySolved: !result.credited,
+    neuronas: result.user.neuronas,
+    points: result.user.points,
+    isLevelComplete: stats.solved >= stats.total,
+    levelStats: stats,
+    result: { timeTaken: solved.timeTaken ?? 0, revealedIndices: solved.revealedIndices ?? [] },
   }
 }
 
-export async function getGlobalRanking(limit: number = 10) {
-  return await prisma.user.findMany({
-    where: {
-      email: { not: null }
-    },
-    orderBy: [
-      { points: 'desc' },
-      { totalTime: 'asc' },
-      { neuronas: 'desc' }
-    ],
-    take: limit,
-    select: {
-      id: true,
-      name: true,
-      username: true,
-      image: true,
-      points: true,
-      totalTime: true,
-      neuronas: true
-    }
+// ---------------------------------------------------------------------------
+// Pistas y saltos (S-5, FR-012, FR-013)
+// ---------------------------------------------------------------------------
+
+export type RequestHintResult =
+  | { success: true; remainingNeuronas: number; revealed: RevealedLetter }
+  | { success: true; remainingNeuronas: number; isLevelComplete: boolean; levelStats?: LevelStats }
+  | { success: false; error: string }
+
+const NOT_ENOUGH = 'Not enough neuronas'
+const NOT_IN_PLAY = 'La palabra ya no está en juego.'
+
+async function charge(tx: Prisma.TransactionClient, userId: string, cost: number) {
+  const charged = await tx.user.updateMany({
+    where: { id: userId, neuronas: { gte: cost } },
+    data: { neuronas: { decrement: cost } },
   })
+  if (charged.count === 0) throw new ActionError(NOT_ENOUGH)
+  const u = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { neuronas: true } })
+  return u.neuronas
+}
+
+export async function requestHint(wordId: number, type: 'letter' | 'skip'): Promise<RequestHintResult> {
+  const user = await ensureCurrentUser()
+  if (type !== 'letter' && type !== 'skip') return { success: false, error: 'Tipo de pista inválido.' }
+
+  const inPlay = await findWordInPlay(prisma, user, wordId)
+  if (!inPlay) return { success: false, error: NOT_IN_PLAY }
+
+  const costs = await getCosts()
+  const cost = type === 'letter' ? costs.letter : costs.skip
+  if (user.neuronas < cost) return { success: false, error: NOT_ENOUGH }
+
+  try {
+    if (type === 'letter') {
+      const current = inPlay.progress?.revealedIndices ?? []
+      if (current.length >= MAX_LETTER_HINTS) {
+        return { success: false, error: 'Has alcanzado el límite de 2 pistas para esta palabra.' }
+      }
+      const available = Array.from({ length: inPlay.word.word.length }, (_, i) => i).filter((i) => !current.includes(i))
+      if (available.length === 0) return { success: false, error: 'No hay más letras para revelar.' }
+
+      const index = available[Math.floor(Math.random() * available.length)]
+      const next = [...current, index]
+
+      const remaining = await prisma.$transaction(async (tx) => {
+        await registerDelivery(tx, user.id, wordId)
+        // Optimista: solo aplica si nadie cambió las letras reveladas desde que las leímos.
+        const updated = await tx.$executeRaw`
+          UPDATE "Progress" SET "revealedIndices" = ${next}::int[]
+          WHERE "userId" = ${user.id} AND "wordId" = ${wordId}
+            AND guessed = false AND skipped = false
+            AND COALESCE("revealedIndices", '{}'::int[]) = ${current}::int[]`
+        if (updated === 0) throw new ActionError('Otra pista se procesó al mismo tiempo. Probá de nuevo.')
+        return charge(tx, user.id, cost)
+      })
+
+      return {
+        success: true,
+        remainingNeuronas: remaining,
+        revealed: { index, letter: inPlay.word.word[index].toUpperCase() },
+      }
+    }
+
+    // skip
+    const remaining = await prisma.$transaction(async (tx) => {
+      await registerDelivery(tx, user.id, wordId)
+      const skipped = await tx.progress.updateMany({
+        where: { userId: user.id, wordId, guessed: false, skipped: false },
+        data: { skipped: true },
+      })
+      if (skipped.count === 0) throw new ActionError(NOT_IN_PLAY)
+      return charge(tx, user.id, cost)
+    })
+
+    const stats = await getLevelStats(prisma, user.id, inPlay.word.levelId)
+    return {
+      success: true,
+      remainingNeuronas: remaining,
+      isLevelComplete: stats.solved >= stats.total,
+      levelStats: stats,
+    }
+  } catch (error) {
+    if (error instanceof ActionError) return { success: false, error: error.message }
+    throw error
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Rankings (sin User.id: FR-005)
+// ---------------------------------------------------------------------------
+
+export type RankingEntry = {
+  name: string | null
+  username: string | null
+  image: string | null
+  points: number
+  totalTime: number
+  neuronas?: number
+  /** 002-social: calculados en el servidor para el usuario actual; nunca se devuelve User.id. */
+  isMe: boolean
+  isFollowed: boolean
+}
+
+/** Ids que sigue el usuario actual (solo usuarios de Google con username; si no, ninguno). */
+async function viewerContext(): Promise<{ viewerId: string | null; followed: Set<string> }> {
+  const viewer = await getCurrentUser()
+  if (!viewer) return { viewerId: null, followed: new Set() }
+  if (!viewer.email || !viewer.username) return { viewerId: viewer.id, followed: new Set() }
+  const rows = await prisma.follow.findMany({ where: { followerId: viewer.id }, select: { followeeId: true } })
+  return { viewerId: viewer.id, followed: new Set(rows.map((r) => r.followeeId)) }
+}
+
+export async function getGlobalRanking(limit: number = 10): Promise<RankingEntry[]> {
+  const [rows, ctx] = await Promise.all([
+    prisma.user.findMany({
+      where: { email: { not: null } },
+      orderBy: [{ points: 'desc' }, { totalTime: 'asc' }, { neuronas: 'desc' }],
+      take: Math.min(Math.max(1, limit), 50),
+      select: { id: true, name: true, username: true, image: true, points: true, totalTime: true, neuronas: true },
+    }),
+    viewerContext(),
+  ])
+  return rows.map(({ id, ...rest }) => ({ ...rest, isMe: id === ctx.viewerId, isFollowed: ctx.followed.has(id) }))
 }
 
 export async function getLevelRanking(levelId: number, limit: number = 10) {
-  // This is slightly more complex as it depends on Progress per level
-  // For now, we'll return users who have solved words in this level, 
-  // ordered by how many words they solved in this level and total time for those words.
-  const usersWithProgress = await prisma.user.findMany({
-    where: {
-      email: { not: null },
-      progress: {
-        some: {
-          word: { levelId }
-        }
-      }
-    },
-    include: {
-      progress: {
-        where: {
-          word: { levelId },
-          guessed: true
-        }
-      }
-    },
-    take: limit
-  })
+  if (!Number.isInteger(levelId)) return []
+  const take = Math.min(Math.max(1, Math.trunc(limit) || 10), 50)
+  // Ordena y limita en la base (RANK-03): antes se tomaban N usuarios arbitrarios y se ordenaba en JS.
+  const [rows, ctx] = await Promise.all([
+    prisma.$queryRaw<{ id: string; name: string | null; username: string | null; image: string | null; levelPoints: number; levelTime: number }[]>`
+      SELECT u.id, u.name, u.username, u.image,
+             COUNT(*) FILTER (WHERE p.guessed)::int AS "levelPoints",
+             COALESCE(SUM(p."timeTaken") FILTER (WHERE p.guessed), 0)::float8 AS "levelTime"
+      FROM "User" u
+      JOIN "Progress" p ON p."userId" = u.id
+      JOIN "Word" w ON w.id = p."wordId"
+      WHERE u.email IS NOT NULL AND w."levelId" = ${levelId}
+      GROUP BY u.id
+      ORDER BY "levelPoints" DESC, "levelTime" ASC, u.id ASC
+      LIMIT ${take}`,
+    viewerContext(),
+  ])
 
-  // Sort manually to keep it simple since Prisma doesn't support complex aggregations in orderBy directly easily
-  return usersWithProgress
-    .map(user => ({
-      id: user.id,
-      name: user.name,
-      username: user.username,
-      image: user.image,
-      levelPoints: user.progress.length,
-      levelTime: user.progress.reduce((acc, p) => acc + (p.timeTaken || 0), 0)
-    }))
-    .sort((a, b) => b.levelPoints - a.levelPoints || a.levelTime - b.levelTime)
-    .slice(0, limit)
+  return rows.map(({ id, ...rest }) => ({
+    ...rest,
+    isMe: id === ctx.viewerId,
+    isFollowed: ctx.followed.has(id),
+  }))
 }
 
-export async function getRandomWordFromLevel(levelId: number) {
-  const user = await getUser()
-  
-  if (!user) {
-    const words = await prisma.word.findMany({
-      where: { levelId }
-    })
-    if (words.length === 0) return null
-    return words[Math.floor(Math.random() * words.length)]
-  }
+// ---------------------------------------------------------------------------
+// Configuración, mensajes y username (sin cambios funcionales)
+// ---------------------------------------------------------------------------
 
-  // Find words already solved or skipped by this user
-  const userProgress = await prisma.progress.findMany({
-    where: { 
-      userId: user.id,
-      OR: [
-        { guessed: true },
-        { skipped: true }
-      ]
-    },
-    select: { wordId: true }
-  })
-
-  const solvedWordIds = new Set(userProgress.map(p => p.wordId))
-
-  // Find all words in this level NOT in the solved set
-  const availableWords = await prisma.word.findMany({
-    where: { 
-      levelId,
-      id: { notIn: Array.from(solvedWordIds) }
-    }
-  })
-
-  if (availableWords.length === 0) {
-    // If all words in this level are solved, return null to trigger level completion flow
-    return null;
-  }
-
-  return availableWords[Math.floor(Math.random() * availableWords.length)]
+export async function getGameSettings() {
+  const settings = await prisma.setting.findMany()
+  return Object.fromEntries(settings.map((s) => [s.id, s.value]))
 }
 
-export async function moveToNextLevel() {
-  const user = await getUser()
-  if (!user) return { success: false, error: 'User not found' }
-
-  const nextLevelId = user.levelId + 1
-
-  // Update user's level
-  const updatedUser = await prisma.user.update({
-    where: { id: user.id },
-    data: { levelId: nextLevelId }
-  })
-
-  // Get first word of next level
-  const nextWord = await prisma.word.findFirst({
-    where: { levelId: nextLevelId },
-    orderBy: { id: 'asc' }
-  })
-
-  return { 
-    success: true, 
-    nextLevelId, 
-    nextWord,
-    updatedUser 
-  }
+export async function getRandomMessage(type: 'success' | 'fail') {
+  const messages = await prisma.gameMessage.findMany({ where: { type } })
+  if (messages.length === 0) return type === 'success' ? '¡Correcto!' : '¡Error!'
+  return messages[Math.floor(Math.random() * messages.length)].content
 }
 
 export async function getLevels() {
-  return await prisma.level.findMany({
-    orderBy: { id: 'asc' }
-  })
+  return prisma.level.findMany({ orderBy: { id: 'asc' } })
 }
 
-export async function getWordsByLevel(levelId: number) {
-  return await prisma.word.findMany({
-    where: { levelId },
-    orderBy: { id: 'asc' }
-  })
-}
+// Límite en memoria por jugador para checkUsername (USER-07). Es por proceso: alcanza para
+// frenar la enumeración desde un navegador; no reemplaza un límite global.
+const usernameChecks = new Map<string, number[]>()
 
-export async function getInitialGameState() {
-  const user = await getUser()
-  
-  // If no user, return first level and first word as defaults
-  if (!user) {
-    const firstLevel = await prisma.level.findFirst({ orderBy: { id: 'asc' } });
-    const firstWord = await prisma.word.findFirst({ 
-      where: { levelId: firstLevel?.id }, 
-      orderBy: { id: 'asc' } 
-    });
-    return {
-      word: firstWord,
-      level: firstLevel,
-      neuronas: 50,
-      revealedIndices: [],
-      needsUsername: false
-    }
+function allowUsernameCheck(userId: string): boolean {
+  const now = Date.now()
+  const recent = (usernameChecks.get(userId) ?? []).filter((t) => now - t < 60_000)
+  if (recent.length >= USERNAME_CHECKS_PER_MINUTE) {
+    usernameChecks.set(userId, recent)
+    return false
   }
-
-  // Check if user needs a username
-  const needsUsername = !user.username;
-
-  // Get current level
-  const currentLevel = await prisma.level.findUnique({
-    where: { id: user.levelId }
-  })
-
-  if (!currentLevel) return null
-
-  // Get words for this level
-  const words = await prisma.word.findMany({
-    where: { levelId: user.levelId },
-    orderBy: { id: 'asc' }
-  })
-
-  // Find the first word not yet solved or skipped
-  const userProgress = await prisma.progress.findMany({
-    where: { userId: user.id },
-    select: { wordId: true, guessed: true, skipped: true, revealedIndices: true }
-  })
-
-  const solvedWordIds = new Set(
-    userProgress
-      .filter(p => p.guessed || p.skipped)
-      .map(p => p.wordId)
-  )
-
-  let initialWord = words.find(w => !solvedWordIds.has(w.id))
-
-  // If all words in this level are solved, move to next level
-  if (!initialWord) {
-    const nextLevel = await prisma.level.findFirst({
-      where: { id: { gt: user.levelId } },
-      orderBy: { id: 'asc' }
+  recent.push(now)
+  usernameChecks.set(userId, recent)
+  if (usernameChecks.size > 10_000) {
+    usernameChecks.forEach((v, k) => {
+      if (v.every((t) => now - t >= 60_000)) usernameChecks.delete(k)
     })
-
-    if (nextLevel) {
-      // Update user to next level and get its first word
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { levelId: nextLevel.id }
-      })
-      
-      const nextWords = await prisma.word.findMany({
-        where: { levelId: nextLevel.id },
-        orderBy: { id: 'asc' }
-      })
-      
-      return {
-        word: nextWords[0],
-        level: nextLevel,
-        neuronas: user.neuronas,
-        revealedIndices: [],
-        needsUsername
-      }
-    } else {
-      // All levels completed? Return the last word of the last level or something
-      const lastWord = words[words.length - 1];
-      const lastProgress = userProgress.find(p => p.wordId === lastWord.id);
-      return {
-        word: lastWord,
-        level: currentLevel,
-        neuronas: user.neuronas,
-        revealedIndices: lastProgress?.revealedIndices || [],
-        needsUsername
-      }
-    }
   }
-
-  const currentWordProgress = userProgress.find(p => p.wordId === initialWord!.id);
-
-  return {
-    word: initialWord,
-    level: currentLevel,
-    neuronas: user.neuronas,
-    revealedIndices: currentWordProgress?.revealedIndices || [],
-    needsUsername
-  }
+  return true
 }
 
-export async function checkUsername(username: string) {
-  const existingUser = await prisma.user.findUnique({
-    where: { username }
-  });
-  return { available: !existingUser };
+export async function checkUsername(
+  username: string
+): Promise<{ available: boolean; error?: 'no_identity' | 'rate_limited' }> {
+  const user = await getCurrentUser()
+  if (!user) return { available: false, error: 'no_identity' }
+  if (!allowUsernameCheck(user.id)) return { available: false, error: 'rate_limited' }
+  if (!isValidUsername(username)) return { available: false }
+  const existingUser = await prisma.user.findUnique({ where: { username }, select: { id: true } })
+  return { available: !existingUser }
 }
 
-export async function updateUsername(username: string) {
-  const user = await getUser();
-  if (!user) return { success: false, error: 'Unauthorized' };
+export async function updateUsername(username: string): Promise<{ success: boolean; error?: string; alreadySet?: true }> {
+  const user = await getCurrentUser()
+  if (!user) return { success: false, error: 'Unauthorized' }
+  if (!isValidUsername(username)) {
+    return { success: false, error: 'El nombre debe tener entre 3 y 15 letras, números o guiones bajos.' }
+  }
 
   try {
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { username }
-    });
-    return { success: true };
+    // Solo se fija una vez (USER-02): el UPDATE condicional evita carreras entre pestañas.
+    const updated = await prisma.user.updateMany({ where: { id: user.id, username: null }, data: { username } })
+    // alreadySet: el cliente cierra el modal (p. ej. el alias llegó migrado desde el invitado, SYNC-10).
+    if (updated.count === 0) return { success: false, error: 'Ya elegiste tu nombre y no se puede cambiar.', alreadySet: true }
+    return { success: true }
   } catch (error) {
-    return { success: false, error: 'Error updating username' };
+    if ((error as { code?: string })?.code === 'P2002') return { success: false, error: 'Ese nombre ya está en uso.' }
+    return { success: false, error: 'No se pudo guardar el nombre.' }
   }
 }
